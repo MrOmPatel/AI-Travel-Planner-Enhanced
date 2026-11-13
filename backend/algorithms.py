@@ -253,8 +253,8 @@ def schedule_day(ordered_places: list,
     Inclusion rules:
     - Weather is advisory only: schedule outdoor places and attach a warning.
     - Budget is advisory only: schedule paid places and flag any overrun.
-    - Opening hours remain a hard constraint: do not schedule a visit that
-      cannot finish before the attraction closes.
+    - Arrival must be strictly before closing time. Short visits are allowed
+      with a warning when the normal visit duration will not fit.
     - Travel time inserted between every stop.
     - Meals at 08:00 (breakfast), 13:00 (lunch), 19:00 (dinner).
     """
@@ -322,11 +322,27 @@ def schedule_day(ordered_places: list,
         if clock < open_dt:
             clock = open_dt
 
-        if clock + timedelta(hours=visit_hrs) > close_dt:
-            print("  SKIP (closed): " + place.get("name", "?") +
+        # Skip only when the attraction is already closed on arrival.
+        # When open but near closing, shorten the planned visit and warn.
+        if clock >= close_dt:
+            print("  SKIP (already closed): " + place.get("name", "?") +
                   " closes " + place.get("close_time", "18:00") +
                   ", arrive " + clock.strftime("%H:%M"))
             continue
+
+        available_minutes = (close_dt - clock).total_seconds() / 60
+        requested_minutes = visit_hrs * 60
+        actual_visit_minutes = min(requested_minutes, available_minutes)
+        closing_warning = ""
+        if actual_visit_minutes < requested_minutes:
+            closing_warning = (
+                "Limited visiting time: arrives at " + clock.strftime("%H:%M") +
+                ", closes at " + close_dt.strftime("%H:%M") +
+                ". Normal visit takes about " + str(round(visit_hrs, 1)) +
+                " hours; only " + str(int(actual_visit_minutes)) +
+                " minutes are available. Check last-entry rules before visiting."
+            )
+            print("  CAUTION (closing soon): " + place.get("name", "?"))
 
         if clock.hour >= 21:
             print("  STOP: day cutoff at " + clock.strftime("%H:%M"))
@@ -343,6 +359,8 @@ def schedule_day(ordered_places: list,
             print("  CAUTION (weather): " + place.get("name", "?") +
                   " retained in itinerary with advisory")
 
+        if closing_warning:
+            caution_parts.append(closing_warning)
         caution_note = " ".join(caution_parts)
 
         # ── Budget advisory: never exclude a place solely due to its fee ───
@@ -364,7 +382,7 @@ def schedule_day(ordered_places: list,
             "activity":    place.get("name", "Visit"),
             "description": place.get("description", ""),
             "location":    place.get("location", ""),
-            "duration":    str(visit_hrs) + " hrs",
+            "duration":    str(int(actual_visit_minutes)) + " min",
             "cost_inr":    round(entry_fee, 2),
             "is_meal":     False,
             "travel_note": travel_note,
@@ -372,7 +390,7 @@ def schedule_day(ordered_places: list,
         })
         spent_act  += entry_fee
         prev_lat, prev_lon = lat, lon
-        clock += timedelta(hours=visit_hrs)
+        clock += timedelta(minutes=actual_visit_minutes)
 
     # ── Dinner ────────────────────────────────────────────────────────────────
     if "dinner" not in meals_done:
