@@ -112,7 +112,7 @@ class ItineraryAgent(BaseAgent):
             "You are a travel writer. The schedule, timings, costs, and routing are FIXED. "
             "Do NOT change any times, costs, or activity order. "
             "Only add: engaging day title with date, 2-sentence narrative per activity, "
-            "tips, and event detection. Return a compact valid JSON object with a top-level \"days\" array. Keep each activity description to one concise sentence."
+            "tips, and event detection. Return ONLY valid JSON array."
         )
         user_prompt = (
             "Enrich this pre-computed itinerary for " + destination + ".\n\n"
@@ -121,8 +121,7 @@ class ItineraryAgent(BaseAgent):
             "=== LOCAL EVENTS ===\n" + events_ctx + "\n\n"
             "=== WEATHER ===\n" + weather_ctx + "\n\n"
             "Interests: " + interests_str + " | Travelers: " + str(travelers) + "\n\n"
-            'Return one JSON object with a top-level key "days" containing an array of '
-            + str(len(algo_days)) + " day objects. Each must have:\n"
+            "Return JSON array of " + str(len(algo_days)) + " objects. Each must have:\n"
             "  day (number, keep as-is)\n"
             "  title (string — include actual date e.g. 'Day 1 — April 01, 2026 (Wednesday)')\n"
             "  weather_note (string — keep from schedule above)\n"
@@ -135,48 +134,12 @@ class ItineraryAgent(BaseAgent):
             "  tips (string — one practical tip)\n"
             "  has_event (bool), event_name (string or null)\n\n"
             "CRITICAL: In activities, use key 'activity' (not 'name') for the place name.\n"
-            'Return ONLY this JSON structure: {"days": [...]}.'
+            "Return ONLY the JSON array."
         )
 
-        # Groq JSON mode requires a JSON object. Ask for a {"days": [...]} envelope,
-        # then retry once with a shorter corrective instruction if parsing/shape fails.
-        enriched = None
-        last_error = None
-        for attempt in range(2):
-            try:
-                prompt = user_prompt
-                if attempt:
-                    prompt += (
-                        "\n\nCORRECTION: Your previous response was not valid JSON. "
-                        "Return a compact valid JSON object only, shaped exactly as "
-                        '{"days": [day objects]}. Do not use markdown or extra text.'
-                    )
-                response = self.clean_json(self.invoke_json(system_prompt, prompt))
-                payload = json.loads(response)
-                candidate = payload.get("days") if isinstance(payload, dict) else None
-                if not isinstance(candidate, list) or len(candidate) != len(algo_days):
-                    raise ValueError("Enrichment JSON must contain a 'days' list matching the input day count")
-                if not all(isinstance(day, dict) for day in candidate):
-                    raise ValueError("Each enriched day must be a JSON object")
-                enriched = candidate
-                break
-            except Exception as e:
-                last_error = e
-                print("Itinerary enrichment attempt " + str(attempt + 1) +
-                      " failed: " + str(e))
-
-        if enriched is None:
-            print("JSON error (enrich): " + str(last_error) + " — returning raw algo days")
-            for i, day in enumerate(algo_days):
-                if i < len(day_dates):
-                    day.setdefault("title", "Day " + str(day.get("day", i + 1)) +
-                                   " — " + day_dates[i])
-                    day.setdefault("tips", "Enjoy your day!")
-                    day.setdefault("has_event", False)
-                    day.setdefault("event_name", None)
-            return algo_days
-
+        response = self.clean_json(self.invoke(system_prompt, user_prompt))
         try:
+            enriched = json.loads(response)
             # Re-stamp authoritative values from algo_days
             for i, day in enumerate(enriched):
                 if i < len(algo_days):
@@ -184,10 +147,12 @@ class ItineraryAgent(BaseAgent):
                     day["actual_date"] = src.get("actual_date","")
                     day["date_label"]  = src.get("date_label", day_dates[i] if i < len(day_dates) else "")
                     try:
-                        orig = float(src.get("estimated_cost_inr", daily_total_cap))
-                        day["estimated_cost_inr"] = round(min(orig, daily_total_cap), 2)
+                        orig = float(src.get("estimated_cost_inr", 0) or 0)
+                        # Report the actual estimated spend, even when it exceeds
+                        # the suggested budget. The scheduler attaches a warning.
+                        day["estimated_cost_inr"] = round(orig, 2)
                     except (ValueError, TypeError):
-                        day["estimated_cost_inr"] = round(daily_total_cap, 2)
+                        day["estimated_cost_inr"] = 0.0
                     # Always restore authoritative activity data from algo_days.
                     # The LLM may rename "activity" to "name" or drop fields —
                     # we overlay the original field values to guarantee correctness.
@@ -221,12 +186,11 @@ class ItineraryAgent(BaseAgent):
                                 merged.append(src_act)
                         day["activities"] = merged
             return enriched
-        except Exception as e:
-            print("Enrichment merge error: " + str(e) + " — returning raw algo days")
+        except json.JSONDecodeError as e:
+            print("JSON error (enrich): " + str(e) + " — returning raw algo days")
             for i, day in enumerate(algo_days):
                 if i < len(day_dates):
-                    day.setdefault("title", "Day " + str(day.get("day", i + 1)) +
-                                   " — " + day_dates[i])
+                    day.setdefault("title", "Day " + str(day["day"]) + " — " + day_dates[i])
                     day.setdefault("tips", "Enjoy your day!")
                     day.setdefault("has_event", False)
                     day.setdefault("event_name", None)
@@ -269,12 +233,15 @@ class ItineraryAgent(BaseAgent):
             "Return JSON array of " + str(duration) + " day objects, each with:\n"
             "day, title (include actual date), weather_note, "
             "activities (array: time, activity, description, location, duration, cost_inr), "
-            "meals (breakfast/lunch/dinner), estimated_cost_inr (<=Rs " + str(int(daily_total_cap)) + "), "
+            "meals (breakfast/lunch/dinner), estimated_cost_inr (actual estimated total; "
+            "may exceed the suggested budget), "
             "tips, has_event (bool), event_name.\nReturn ONLY the JSON array."
         )
 
         response = self.clean_json(self.invoke(
-            "You are a budget-conscious itinerary planner. All costs in INR. Return ONLY valid JSON array.",
+            "You are a practical travel planner. Treat budget and weather as advisory warnings, "
+            "not reasons to omit otherwise suitable attractions. Never falsify or cap cost estimates. "
+            "All costs in INR. Return ONLY valid JSON array.",
             user_prompt))
         try:
             days = json.loads(response)
@@ -284,18 +251,15 @@ class ItineraryAgent(BaseAgent):
                     day["date_label"]  = day_dates[i]
             for day in days:
                 try:
-                    cost = float(day.get("estimated_cost_inr", daily_total_cap) or daily_total_cap)
-                    day["estimated_cost_inr"] = round(min(cost, daily_total_cap), 2)
-                    rem = act_per_day
+                    cost = float(day.get("estimated_cost_inr", 0) or 0)
+                    day["estimated_cost_inr"] = round(cost, 2)
                     for act in day.get("activities", []):
                         try:
-                            c = min(float(act.get("cost_inr",0) or 0), rem)
-                            act["cost_inr"] = round(c, 2)
-                            rem = max(0, rem - c)
+                            act["cost_inr"] = round(float(act.get("cost_inr", 0) or 0), 2)
                         except (ValueError, TypeError):
                             act["cost_inr"] = 0
                 except (ValueError, TypeError):
-                    day["estimated_cost_inr"] = round(daily_total_cap, 2)
+                    day["estimated_cost_inr"] = 0.0
             return days
         except json.JSONDecodeError as e:
             print("JSON error (llm_generate): " + str(e))

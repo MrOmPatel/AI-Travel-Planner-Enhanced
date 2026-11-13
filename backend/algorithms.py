@@ -250,27 +250,19 @@ def schedule_day(ordered_places: list,
     """
     Build a single day's timed activity list.
 
-    Weather rule (FIXED):
-    - Bad weather (heat/rain) → try to skip outdoor places in 11:00-17:00 window
-    - BUT if no other option exists for that slot, schedule the place anyway
-      with a caution note — empty afternoon is worse than a cautioned visit.
-
-    Other rules:
-    - Travel time inserted between every stop
-    - Opening hours enforced — skip if closed
-    - Budget enforced — skip if over activities budget
-    - Meals at 08:00 (breakfast), 13:00 (lunch), 19:00 (dinner)
+    Inclusion rules:
+    - Weather is advisory only: schedule outdoor places and attach a warning.
+    - Budget is advisory only: schedule paid places and flag any overrun.
+    - Opening hours remain a hard constraint: do not schedule a visit that
+      cannot finish before the attraction closes.
+    - Travel time inserted between every stop.
+    - Meals at 08:00 (breakfast), 13:00 (lunch), 19:00 (dinner).
     """
     clock      = datetime(2000, 1, 1, 8, 0)
     activities = []
     spent_act  = 0.0
     meals_done = set()
     prev_lat, prev_lon = hotel_lat, hotel_lon
-
-    # ── Pre-scan: count how many places can fill 11:00-17:00 bad-weather slot ──
-    # If zero indoor options exist, we must show outdoor places with caution
-    indoor_options = [p for p in ordered_places if not p.get("is_outdoor", True)]
-    has_indoor_afternoon = len(indoor_options) > 0
 
     def insert_meal(meal_slot, override_clock=None):
         """Insert a meal break. override_clock lets us insert at a fixed time."""
@@ -340,30 +332,31 @@ def schedule_day(ordered_places: list,
             print("  STOP: day cutoff at " + clock.strftime("%H:%M"))
             break
 
-        # ── Weather check (FIXED) ─────────────────────────────────────────
-        # Bad weather window: 11:00 – 17:00 on extreme heat or rainy days
-        is_outdoor   = bool(place.get("is_outdoor", True))
-        in_bad_window = not is_outdoor_ok and 11 <= clock.hour < 17
-        caution_note  = ""
-
-        if in_bad_window and is_outdoor:
-            # Weather is a preference, not a hard exclusion. A strict skip here
-            # can leave an entire day with meals only. Keep the attraction and
-            # surface a clear caution so the traveller can decide.
-            caution_note = (
-                "⚠️ Outdoor visit during unfavourable weather. Check the latest "
-                "forecast before leaving, carry water, and use sun/rain protection."
+        # ── Weather advisory: never exclude a place solely due to weather ──
+        is_outdoor = bool(place.get("is_outdoor", True))
+        caution_parts = []
+        if not is_outdoor_ok and is_outdoor:
+            caution_parts.append(
+                "Weather may be unsuitable for this outdoor visit. Check the "
+                "latest forecast before leaving and carry suitable protection."
             )
             print("  CAUTION (weather): " + place.get("name", "?") +
-                  " retained despite weather restriction")
+                  " retained in itinerary with advisory")
 
-        # ── Budget check ──────────────────────────────────────────────────
+        caution_note = " ".join(caution_parts)
+
+        # ── Budget advisory: never exclude a place solely due to its fee ───
         entry_fee = float(place.get("entry_fee_inr", 0) or 0) * travelers
         if spent_act + entry_fee > act_budget and entry_fee > 0:
-            print("  SKIP (budget): " + place.get("name", "?") +
-                  " Rs " + str(int(entry_fee)) +
-                  " | remaining Rs " + str(int(act_budget - spent_act)))
-            continue
+            remaining = max(0.0, act_budget - spent_act)
+            budget_warning = (
+                "Estimated activity budget exceeded: this visit costs about Rs "
+                + str(int(entry_fee)) + " for the group; remaining activity "
+                "budget before this visit was about Rs " + str(int(remaining)) + "."
+            )
+            caution_note = (caution_note + " " + budget_warning).strip()
+            print("  CAUTION (budget): " + place.get("name", "?") +
+                  " retained; activity budget may be exceeded")
 
         # ── Schedule the place ────────────────────────────────────────────
         activities.append({
@@ -492,50 +485,14 @@ def run_algorithm_pipeline(places: list,
     print("\n[ALGO] Step 1 — Preference Scoring")
     ranked = score_and_rank_places(places, interests, act_per_day)
 
-    # Take top (duration * 5) places to give each day ~5 options
-    # This provides buffer: even if 2 are skipped (closed/budget/weather),
-    # there are still 3 left to fill the morning, afternoon AND post-lunch slots
-    top_places = ranked[:duration * 5]
+    # Keep the complete discovered candidate pool (up to the generated list).
+    # Weather and budget are advisories, not exclusion filters; only genuine
+    # scheduling feasibility such as opening hours/time can prevent a visit.
+    top_places = ranked
 
-    # ── Step 2: Balanced geo-aware distribution ─────────────────────────────
-    # Pure K-Means can leave some day-groups empty or heavily unbalanced.
-    # Distribute attractions in score order while preferring the closest
-    # current day-centroid. The least-filled day is considered first, which
-    # guarantees every day receives an attraction when enough places exist.
-    print("\\n[ALGO] Step 2 — Balanced Geo-Clustering (" + str(duration) + " days)")
-    day_buckets = [[] for _ in range(duration)]
-    day_centroids = [None for _ in range(duration)]
-
-    for place in top_places:
-        lat, lon = _parse_coord(place)
-        eligible = sorted(range(duration), key=lambda d: (len(day_buckets[d]), d))
-        # Among equally small buckets, choose the geographically closest one.
-        min_count = len(day_buckets[eligible[0]])
-        eligible = [d for d in eligible if len(day_buckets[d]) == min_count]
-        if eligible:
-            chosen_day = min(
-                eligible,
-                key=lambda d: (
-                    haversine(lat, lon, day_centroids[d][0], day_centroids[d][1])
-                    if day_centroids[d] is not None else 0.0,
-                    d
-                )
-            )
-        else:
-            chosen_day = 0
-
-        day_buckets[chosen_day].append(place)
-        place["day_group"] = chosen_day
-        # Update centroid incrementally.
-        prev = day_centroids[chosen_day]
-        if prev is None:
-            day_centroids[chosen_day] = (lat, lon)
-        else:
-            n = len(day_buckets[chosen_day])
-            day_centroids[chosen_day] = (
-                prev[0] + (lat - prev[0]) / n,
-                prev[1] + (lon - prev[1]) / n,
-            )
+    # ── Step 2: K-Means Geo-Clustering ──────────────────────────────────────
+    print("\n[ALGO] Step 2 — K-Means Geo-Clustering (" + str(duration) + " clusters)")
+    clustered = kmeans_cluster(top_places, k=duration)
 
     # ── Steps 3–6: Per-day TSP + Greedy Scheduler ────────────────────────────
     algo_days = []
@@ -545,14 +502,11 @@ def run_algorithm_pipeline(places: list,
         date_str    = day_date.isoformat()
         date_label  = day_date.strftime("%B %d, %Y (%A)")
 
-        # Each day gets its own balanced bucket; no overlapping fallback slices.
-        day_places = list(day_buckets[day_idx])
-        if not day_places and ranked:
-            # If there are fewer unique attractions than trip days, repeat the
-            # best-ranked attraction rather than returning a meals-only day.
-            fallback = dict(ranked[day_idx % len(ranked)])
-            fallback["is_repeat_suggestion"] = True
-            day_places = [fallback]
+        # Get places for this cluster
+        day_places = [p for p in clustered if p.get("day_group") == day_idx]
+        if not day_places:
+            # Fallback: distribute remaining ranked places
+            day_places = ranked[day_idx::duration]
 
         # Weather for this day
         dw = daily_wx.get(date_str, {})
