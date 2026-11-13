@@ -347,21 +347,15 @@ def schedule_day(ordered_places: list,
         caution_note  = ""
 
         if in_bad_window and is_outdoor:
-            if has_indoor_afternoon:
-                # Indoor alternatives exist → skip this outdoor place
-                print("  SKIP (weather): outdoor " + place.get("name", "?") +
-                      " at " + clock.strftime("%H:%M") + " — indoor options available")
-                continue
-            else:
-                # No indoor alternatives → schedule with caution note
-                caution_note = (
-                    "⚠️ High temperature expected during this time. "
-                    "Carry water, wear sunscreen, and visit early in this slot. "
-                    if is_outdoor_ok is False
-                    else "⚠️ Rainy weather expected. Carry an umbrella or raincoat."
-                )
-                print("  CAUTION (weather): " + place.get("name", "?") +
-                      " scheduled with weather warning — no indoor alternative")
+            # Weather is a preference, not a hard exclusion. A strict skip here
+            # can leave an entire day with meals only. Keep the attraction and
+            # surface a clear caution so the traveller can decide.
+            caution_note = (
+                "⚠️ Outdoor visit during unfavourable weather. Check the latest "
+                "forecast before leaving, carry water, and use sun/rain protection."
+            )
+            print("  CAUTION (weather): " + place.get("name", "?") +
+                  " retained despite weather restriction")
 
         # ── Budget check ──────────────────────────────────────────────────
         entry_fee = float(place.get("entry_fee_inr", 0) or 0) * travelers
@@ -503,9 +497,45 @@ def run_algorithm_pipeline(places: list,
     # there are still 3 left to fill the morning, afternoon AND post-lunch slots
     top_places = ranked[:duration * 5]
 
-    # ── Step 2: K-Means Geo-Clustering ──────────────────────────────────────
-    print("\n[ALGO] Step 2 — K-Means Geo-Clustering (" + str(duration) + " clusters)")
-    clustered = kmeans_cluster(top_places, k=duration)
+    # ── Step 2: Balanced geo-aware distribution ─────────────────────────────
+    # Pure K-Means can leave some day-groups empty or heavily unbalanced.
+    # Distribute attractions in score order while preferring the closest
+    # current day-centroid. The least-filled day is considered first, which
+    # guarantees every day receives an attraction when enough places exist.
+    print("\\n[ALGO] Step 2 — Balanced Geo-Clustering (" + str(duration) + " days)")
+    day_buckets = [[] for _ in range(duration)]
+    day_centroids = [None for _ in range(duration)]
+
+    for place in top_places:
+        lat, lon = _parse_coord(place)
+        eligible = sorted(range(duration), key=lambda d: (len(day_buckets[d]), d))
+        # Among equally small buckets, choose the geographically closest one.
+        min_count = len(day_buckets[eligible[0]])
+        eligible = [d for d in eligible if len(day_buckets[d]) == min_count]
+        if eligible:
+            chosen_day = min(
+                eligible,
+                key=lambda d: (
+                    haversine(lat, lon, day_centroids[d][0], day_centroids[d][1])
+                    if day_centroids[d] is not None else 0.0,
+                    d
+                )
+            )
+        else:
+            chosen_day = 0
+
+        day_buckets[chosen_day].append(place)
+        place["day_group"] = chosen_day
+        # Update centroid incrementally.
+        prev = day_centroids[chosen_day]
+        if prev is None:
+            day_centroids[chosen_day] = (lat, lon)
+        else:
+            n = len(day_buckets[chosen_day])
+            day_centroids[chosen_day] = (
+                prev[0] + (lat - prev[0]) / n,
+                prev[1] + (lon - prev[1]) / n,
+            )
 
     # ── Steps 3–6: Per-day TSP + Greedy Scheduler ────────────────────────────
     algo_days = []
@@ -515,11 +545,14 @@ def run_algorithm_pipeline(places: list,
         date_str    = day_date.isoformat()
         date_label  = day_date.strftime("%B %d, %Y (%A)")
 
-        # Get places for this cluster
-        day_places = [p for p in clustered if p.get("day_group") == day_idx]
-        if not day_places:
-            # Fallback: distribute remaining ranked places
-            day_places = ranked[day_idx::duration]
+        # Each day gets its own balanced bucket; no overlapping fallback slices.
+        day_places = list(day_buckets[day_idx])
+        if not day_places and ranked:
+            # If there are fewer unique attractions than trip days, repeat the
+            # best-ranked attraction rather than returning a meals-only day.
+            fallback = dict(ranked[day_idx % len(ranked)])
+            fallback["is_repeat_suggestion"] = True
+            day_places = [fallback]
 
         # Weather for this day
         dw = daily_wx.get(date_str, {})
