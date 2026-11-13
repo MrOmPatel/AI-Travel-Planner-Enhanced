@@ -112,7 +112,7 @@ class ItineraryAgent(BaseAgent):
             "You are a travel writer. The schedule, timings, costs, and routing are FIXED. "
             "Do NOT change any times, costs, or activity order. "
             "Only add: engaging day title with date, 2-sentence narrative per activity, "
-            "tips, and event detection. Return ONLY valid JSON array."
+            "tips, and event detection. Return a compact valid JSON object with a top-level \"days\" array. Keep each activity description to one concise sentence."
         )
         user_prompt = (
             "Enrich this pre-computed itinerary for " + destination + ".\n\n"
@@ -121,7 +121,8 @@ class ItineraryAgent(BaseAgent):
             "=== LOCAL EVENTS ===\n" + events_ctx + "\n\n"
             "=== WEATHER ===\n" + weather_ctx + "\n\n"
             "Interests: " + interests_str + " | Travelers: " + str(travelers) + "\n\n"
-            "Return JSON array of " + str(len(algo_days)) + " objects. Each must have:\n"
+            'Return one JSON object with a top-level key "days" containing an array of '
+            + str(len(algo_days)) + " day objects. Each must have:\n"
             "  day (number, keep as-is)\n"
             "  title (string — include actual date e.g. 'Day 1 — April 01, 2026 (Wednesday)')\n"
             "  weather_note (string — keep from schedule above)\n"
@@ -134,12 +135,48 @@ class ItineraryAgent(BaseAgent):
             "  tips (string — one practical tip)\n"
             "  has_event (bool), event_name (string or null)\n\n"
             "CRITICAL: In activities, use key 'activity' (not 'name') for the place name.\n"
-            "Return ONLY the JSON array."
+            'Return ONLY this JSON structure: {"days": [...]}.'
         )
 
-        response = self.clean_json(self.invoke(system_prompt, user_prompt))
+        # Groq JSON mode requires a JSON object. Ask for a {"days": [...]} envelope,
+        # then retry once with a shorter corrective instruction if parsing/shape fails.
+        enriched = None
+        last_error = None
+        for attempt in range(2):
+            try:
+                prompt = user_prompt
+                if attempt:
+                    prompt += (
+                        "\n\nCORRECTION: Your previous response was not valid JSON. "
+                        "Return a compact valid JSON object only, shaped exactly as "
+                        '{"days": [day objects]}. Do not use markdown or extra text.'
+                    )
+                response = self.clean_json(self.invoke_json(system_prompt, prompt))
+                payload = json.loads(response)
+                candidate = payload.get("days") if isinstance(payload, dict) else None
+                if not isinstance(candidate, list) or len(candidate) != len(algo_days):
+                    raise ValueError("Enrichment JSON must contain a 'days' list matching the input day count")
+                if not all(isinstance(day, dict) for day in candidate):
+                    raise ValueError("Each enriched day must be a JSON object")
+                enriched = candidate
+                break
+            except Exception as e:
+                last_error = e
+                print("Itinerary enrichment attempt " + str(attempt + 1) +
+                      " failed: " + str(e))
+
+        if enriched is None:
+            print("JSON error (enrich): " + str(last_error) + " — returning raw algo days")
+            for i, day in enumerate(algo_days):
+                if i < len(day_dates):
+                    day.setdefault("title", "Day " + str(day.get("day", i + 1)) +
+                                   " — " + day_dates[i])
+                    day.setdefault("tips", "Enjoy your day!")
+                    day.setdefault("has_event", False)
+                    day.setdefault("event_name", None)
+            return algo_days
+
         try:
-            enriched = json.loads(response)
             # Re-stamp authoritative values from algo_days
             for i, day in enumerate(enriched):
                 if i < len(algo_days):
@@ -184,11 +221,12 @@ class ItineraryAgent(BaseAgent):
                                 merged.append(src_act)
                         day["activities"] = merged
             return enriched
-        except json.JSONDecodeError as e:
-            print("JSON error (enrich): " + str(e) + " — returning raw algo days")
+        except Exception as e:
+            print("Enrichment merge error: " + str(e) + " — returning raw algo days")
             for i, day in enumerate(algo_days):
                 if i < len(day_dates):
-                    day.setdefault("title", "Day " + str(day["day"]) + " — " + day_dates[i])
+                    day.setdefault("title", "Day " + str(day.get("day", i + 1)) +
+                                   " — " + day_dates[i])
                     day.setdefault("tips", "Enjoy your day!")
                     day.setdefault("has_event", False)
                     day.setdefault("event_name", None)
