@@ -43,18 +43,49 @@ class PlaceAgent(BaseAgent):
         act_per_day = env["activities_per_day"]
         act_total = env["activities_total"]
 
+        # Scale the candidate pool with trip length. These are candidate attractions,
+        # not a promise that every place will be scheduled.
+        if duration <= 2:
+            min_places, max_places = 8, 10
+        elif duration == 3:
+            min_places, max_places = 12, 15
+        elif duration <= 5:
+            min_places, max_places = 16, 20
+        elif duration <= 7:
+            min_places, max_places = 20, 25
+        else:
+            min_places, max_places = 25, 30
+
         search_results = []
         if self.tavily:
-            try:
-                query = "top tourist attractions in " + destination + " " + " ".join(interests[:3])
-                resp = self.tavily.search(query, max_results=5)
-                search_results = resp.get("results", [])
-            except Exception as e:
-                print("Tavily error (places): " + str(e))
+            # Search across different attraction types so results are not limited
+            # to one generic "top attractions" list.
+            search_queries = [
+                "top tourist attractions in " + destination + " " + " ".join(interests[:3]),
+                "best forts palaces historical sites and heritage attractions in " + destination,
+                "best temples lakes museums gardens and cultural attractions in " + destination,
+            ]
+            seen_urls = set()
+            seen_titles = set()
+            for query in search_queries:
+                try:
+                    resp = self.tavily.search(query, max_results=5)
+                    for result in resp.get("results", []):
+                        url = (result.get("url") or "").strip()
+                        title = (result.get("title") or "").strip().lower()
+                        if (url and url in seen_urls) or (title and title in seen_titles):
+                            continue
+                        if url:
+                            seen_urls.add(url)
+                        if title:
+                            seen_titles.add(title)
+                        search_results.append(result)
+                except Exception as e:
+                    print("Tavily error (places): " + str(e))
 
         web_ctx = "\\n".join(
-            "- " + r.get("title", "") + ": " + r.get("content", "")[:200]
-            for r in search_results[:5]
+            "- " + r.get("title", "") + ": " + r.get("content", "")[:250]
+            for r in search_results[:12]
         ) if search_results else "No web data"
 
         system_prompt = (
@@ -63,10 +94,13 @@ class PlaceAgent(BaseAgent):
             "The value of places must be an array. Do not use markdown or comments. "
             "Use double quotes for every JSON key and string. Do not add trailing commas. "
             "Do not invent attractions outside the requested destination. "
-            "Keep each description and tip concise so the complete response fits."
+            "Prefer distinct, genuinely visit-worthy places across different attraction "
+            "types; do not pad the list with minor shops, ordinary streets, or duplicate "
+            "viewpoints. Keep each description and tip concise so the complete response fits."
         )
         user_prompt = (
-            "Create a list of 8-10 must-visit attractions in " + destination + " for "
+            "Create a list of " + str(min_places) + "-" + str(max_places)
+            + " suitable attractions in " + destination + " for "
             + str(duration) + " days.\n\n"
             "Web Search:\\n" + web_ctx + "\\n\\n"
             "Interests: " + interests_str + "\\n\\n"
@@ -103,7 +137,8 @@ class PlaceAgent(BaseAgent):
                 retry_prompt = (
                     user_prompt
                     + "\\n\\nIMPORTANT RETRY: Return a compact JSON object only: "
-                    + "{\\\"places\\\":[...]} with 8-10 attractions. "
+                    + "{\\\"places\\\":[...]} with " + str(min_places) + "-"
+                    + str(max_places) + " attractions. "
                     + "Use short descriptions and tips. No markdown, no trailing commas."
                 )
                 raw = self.invoke_json(system_prompt, retry_prompt)
