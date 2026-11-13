@@ -5,14 +5,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class BaseAgent:
-    """Base Agent — Groq free-tier LLM (llama-3.3-70b-versatile, 14400 req/day free)"""
+    """Base Agent — Groq free-tier LLM (openai/gpt-oss-120b, 14400 req/day free)"""
 
     def __init__(self):
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY missing. Get a free key at console.groq.com")
         self.client = Groq(api_key=api_key)
-        self.model  = "llama-3.3-70b-versatile"
+        self.model  = "openai/gpt-oss-120b"
 
     def invoke(self, system_prompt: str, user_prompt: str) -> str:
         response = self.client.chat.completions.create(
