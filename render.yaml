@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ai-travel-planner-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: FRONTEND_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: GMAIL_SENDER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
