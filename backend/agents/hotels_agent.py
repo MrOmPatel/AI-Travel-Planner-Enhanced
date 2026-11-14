@@ -43,24 +43,22 @@ class HotelsAgent(BaseAgent):
         ) if search_results else "No web data"
 
         system_prompt = (
-            "You are a hotel expert. STRICT RULE: every hotel you list MUST have "
-            "price_per_night_inr BELOW the ceiling given. Never exceed it. "
-            "Return ONLY valid JSON array, nothing else."
+            "You are a hotel expert. Prioritise options that fit the user's budget, but "
+            "include other relevant choices where useful. Never falsify or clamp prices. "
+            "Return ONLY valid JSON array."
         )
         user_prompt = (
             "Recommend hotels in " + destination + " for " + str(travelers) +
             " travelers, " + str(duration) + " nights.\n\n"
             "Web Search:\n" + web_ctx + "\n\n"
-            "=== HARD BUDGET CONSTRAINTS ===\n"
-            "Total accommodation envelope: Rs " + str(int(acc_total)) + "\n"
-            "MAXIMUM price per night: Rs " + str(int(max_per_night)) + "\n"
-            "You MUST NOT suggest any hotel above Rs " + str(int(max_per_night)) + "/night.\n"
-            "Prefer budget and mid-range options.\n\n"
+            "=== BUDGET GUIDELINE (not a hard filter) ===\\n"
+            "Suggested accommodation budget per night: Rs " + str(int(max_per_night)) + "\\n"
+            "Prioritise affordable options, but do not hide useful hotels above this amount.\\n\\n"
             "Return JSON array of 4-5 hotels, cheapest first. Each must have:\n"
             "name, category (Budget/3-Star/4-Star),\n"
             "description (2-3 sentences),\n"
             "location (neighbourhood),\n"
-            "price_per_night_inr (NUMBER, MUST be <= " + str(int(max_per_night)) + "),\n"
+            "price_per_night_inr (realistic NUMBER estimate, may exceed guideline),\n"
             "total_estimated_inr (price_per_night_inr x " + str(duration) + "),\n"
             "rating (3.5-5.0), amenities (array), room_type, proximity, booking_tip,\n"
             "lat (decimal latitude of hotel area, e.g. 26.9124),\n"
@@ -73,12 +71,13 @@ class HotelsAgent(BaseAgent):
         try:
             hotels = json.loads(response)
             for i, h in enumerate(hotels):
-                # Parse and CLAMP price to ceiling
+                # Parse realistic estimated price; retain above-guideline prices
                 try:
                     ppn = float(h.get("price_per_night_inr", max_per_night) or max_per_night)
-                    ppn = min(ppn, max_per_night)              # hard clamp
+                    ppn = max(0, ppn)
                     h["price_per_night_inr"] = round(ppn, 2)
                     h["total_estimated_inr"] = round(ppn * duration, 2)
+                    h["over_budget_guideline"] = ppn > max_per_night
                 except (ValueError, TypeError):
                     h["price_per_night_inr"] = round(max_per_night * 0.7, 2)
                     h["total_estimated_inr"] = round(h["price_per_night_inr"] * duration, 2)

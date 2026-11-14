@@ -1,5 +1,6 @@
 import smtplib
 import os
+from html import escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
@@ -18,8 +19,8 @@ def _build_html(destination, alert_type, body_html):
         "style='background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)'>"
         "<tr><td style='" + HEADER_STYLE + "'>"
         "<p style='margin:0 0 4px;font-size:13px;opacity:0.8'>AI Trip Planner Alert</p>"
-        "<h1 style='margin:0;font-size:22px'>" + destination + "</h1>"
-        "<p style='margin:6px 0 0;font-size:15px;opacity:0.9'>" + alert_type + "</p>"
+        "<h1 style='margin:0;font-size:22px'>" + escape(str(destination)) + "</h1>"
+        "<p style='margin:6px 0 0;font-size:15px;opacity:0.9'>" + escape(str(alert_type)) + "</p>"
         "</td></tr>"
         "<tr><td style='padding:28px 32px;color:#111827;font-size:15px;line-height:1.6'>"
         + body_html +
@@ -56,14 +57,18 @@ def send_alert(to_email, destination, alert_type, body_html):
         print("Email error: " + str(e))
         return False
 
-def send_test_email(to_email):
-    body = (
-        "<p>Your AI Trip Planner email alerts are working correctly.</p>"
-        "<p>You will receive alerts when:</p>"
-        "<ul>"
-        "<li>Weather changes significantly at your destination (temp shift over 5C or rain/storm/extreme heat)</li>"
-        "<li>New local events or festivals are detected at your destination</li>"
-        "</ul>"
-        "<p>Checks run automatically every <strong>6 hours</strong>.</p>"
-    )
-    return send_alert(to_email, "Setup Test", "Test Email — Setup Successful", body)
+def send_test_email(to_email, weather_enabled=True, events_enabled=True):
+    enabled = []
+    if weather_enabled:
+        enabled.append("significant live forecast changes for your saved trip dates")
+    if events_enabled:
+        enabled.append("new or changed local event information")
+    if enabled:
+        items = "".join("<li>" + escape(item) + "</li>" for item in enabled)
+        body = ("<p>Your trip was saved and email delivery was tested successfully.</p>"
+                "<p>You enabled these alert types:</p><ul>" + items + "</ul>"
+                "<p>Checks run every <strong>6 hours while the backend service is running</strong>. "
+                "Delivery is subject to provider availability.</p>")
+    else:
+        body = "<p>Your trip was saved. Automatic weather and event alerts are disabled.</p>"
+    return send_alert(to_email, "Setup Test", "Trip Save Confirmation", body)

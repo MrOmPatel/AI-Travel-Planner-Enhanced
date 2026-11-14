@@ -8,7 +8,7 @@ from agents.itinerary_agent import ItineraryAgent
 from agents.weather_agent import WeatherAgent
 from budget_allocator import allocate
 from algorithms import run_algorithm_pipeline
-from helper import geocode_city
+from reoptimization import filter_places_used_on_other_days
 
 
 class TravelPlanState(TypedDict):
@@ -122,29 +122,9 @@ class TravelPlanWorkflow:
                 int(td.get("travelers", 2)),
                 td.get("travel_type", "default")
             )
-            # Extract hotel coordinates — hotel is the TSP start point each day
-            hotels = state.get("hotels", [])
-            hotel_lat, hotel_lon = 0.0, 0.0
-
-            # Step 1: try cheapest hotel's LLM-provided lat/lon
-            if hotels:
-                try:
-                    lat = float(hotels[0].get("lat") or 0)
-                    lon = float(hotels[0].get("lon") or 0)
-                    if lat != 0.0 and lon != 0.0:
-                        hotel_lat, hotel_lon = lat, lon
-                        print("Hotel coords from LLM: " + str(hotel_lat) + ", " + str(hotel_lon))
-                except (ValueError, TypeError):
-                    pass
-
-            # Step 2: if hotel had no coords, geocode the city center as fallback
-            if hotel_lat == 0.0 and hotel_lon == 0.0:
-                print("Hotel has no coordinates — geocoding city center as TSP start point")
-                hotel_lat, hotel_lon = geocode_city(td.get("destination", ""))
-
-            td["hotel_lat"] = hotel_lat
-            td["hotel_lon"] = hotel_lon
-            print("TSP start point: (" + str(hotel_lat) + ", " + str(hotel_lon) + ")")
+            # Hotel and restaurant recommendations are separate from the daily route.
+            # The itinerary engine starts with the first attraction, not a guessed
+            # hotel coordinate or a (0,0) fallback.
             state["algo_days"] = run_algorithm_pipeline(
                 places         = state.get("places", []),
                 restaurants    = state.get("restaurants", []),
@@ -181,38 +161,27 @@ class TravelPlanWorkflow:
         duration    = int(td.get("duration", 5))
         travelers   = int(td.get("travelers", 2))
         travel_type = td.get("travel_type", "default")
-
-        # Get the planned envelopes
         env = allocate(budget_inr, duration, travelers, travel_type)
 
         hotels    = state.get("hotels", [])
         itinerary = state.get("itinerary", [])
-        places    = state.get("places", [])
 
-        # Accommodation: use cheapest hotel total (already clamped)
-        hotel_totals = [float(h.get("total_estimated_inr", 0))
-                        for h in hotels if h.get("total_estimated_inr")]
-        accommodation = min(hotel_totals) if hotel_totals else env["accommodation_total"]
+        # No hotel or restaurant is automatically selected. Accommodation and food
+        # are shown as planning allowances; actual venue choices remain with the user.
+        accommodation = env["accommodation_total"]
+        food = env["food_total"]
 
-        # Food: sum actual itinerary day costs (already clamped), take food portion
-        total_daily_costs = sum(
-            float(day.get("estimated_cost_inr", 0) or 0) for day in itinerary
-        )
-        # Estimate food as 60% of daily costs (activities are the rest)
-        food = min(round(total_daily_costs * 0.60, 2), env["food_total"])
-
-        # Activities: sum of actual entry fees from places (already clamped)
-        activities = min(
-            sum(float(p.get("entry_fee_inr", 0)) for p in places),
-            env["activities_total"]
-        )
+        # Sum only attraction entry fees actually scheduled, not every discovered place.
+        activities = round(sum(
+            float(act.get("cost_inr", 0) or 0)
+            for day in itinerary
+            for act in day.get("activities", [])
+            if not act.get("is_meal")
+        ), 2)
 
         transport = env["transport_total"]
         misc      = env["misc_total"]
-
         total     = round(accommodation + food + activities + transport + misc, 2)
-        # Hard ceiling: total can never exceed 95% of budget
-        total     = min(total, env["usable_inr"])
         remaining = round(budget_inr - total, 2)
 
         return {
@@ -226,7 +195,7 @@ class TravelPlanWorkflow:
             "user_budget_usd":    td.get("budget_usd", 0),
             "inr_rate":           td.get("inr_rate", 84.0),
             "remaining":          remaining,
-            "within_budget":      remaining >= 0,
+            "within_budget":      total <= budget_inr,
             # Envelopes for display
             "envelope": {
                 "hotel_max_per_night":     env["hotel_max_per_night"],
@@ -250,13 +219,10 @@ class TravelPlanWorkflow:
         print("Re-optimizing day " + str(day_number) +
               " (removed: " + removed_attraction + ")")
 
-        # Exclude: the removed attraction + places used on other days
-        excluded = set()
-        excluded.add(removed_attraction)
-        if used_places:
-            excluded.update(used_places)
-
-        available = [p for p in places if p.get("name", "") not in excluded]
+        # Exclude only attractions assigned to OTHER days. Attractions previously
+        # shown on this day remain eligible because they may be the only feasible
+        # arrangement for the day's constraints.
+        available = filter_places_used_on_other_days(places, used_places)
         print("  Available places after exclusion: " + str(len(available)) +
               " / " + str(len(places)))
 

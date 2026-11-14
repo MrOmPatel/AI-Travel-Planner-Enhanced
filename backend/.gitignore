@@ -31,3 +31,6 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Cached verified place coordinates
+.geocode_cache.json

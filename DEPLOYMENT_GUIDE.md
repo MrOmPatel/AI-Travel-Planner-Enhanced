@@ -26,7 +26,7 @@ Extract this project and push the contents of this folder (`AI_Trip_Planner_Enha
 - Render free web services spin down after inactivity; the first request after sleeping can take a while.
 - The backend currently stores accounts and saved trips in SQLite at `backend/trips.db`. Render's free filesystem is ephemeral, so this data can be lost when the service restarts or redeploys. Use a persistent database (for example, PostgreSQL/Supabase) before relying on saved accounts/trips.
 - The APScheduler task runs inside the web process. It will not reliably run every six hours while a free service is asleep. Use an always-on worker or an external scheduled job for dependable alerts.
-- Email alerts require valid Gmail credentials and an App Password. SMTP restrictions or provider limits may affect delivery.
+- Email alerts require valid Gmail credentials and an App Password. SMTP restrictions or provider limits may affect delivery. Set `CHECKS_ADMIN_TOKEN` only if you need to invoke the protected manual check endpoint; send it in the `X-Admin-Token` header.
 - Free API plans have quotas and can change.
 
 ## 5. Local development
@@ -36,3 +36,11 @@ Frontend: `cd frontend && npm install && npm run dev`
 Backend: `cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python app.py`
 
 The frontend defaults to `http://127.0.0.1:5000` when `NEXT_PUBLIC_API_URL` is not set.
+
+## Authentication and itinerary history
+
+- Users must sign up or sign in before generating or re-optimizing itineraries.
+- Generated itineraries are automatically stored against the authenticated account and remain until manually deleted.
+- Existing password hashes are upgraded automatically after a successful login; users do not need to reset their passwords.
+- Sessions expire after 30 days by default. `SESSION_DAYS` can override this in the backend environment.
+- Re-optimizing one day excludes attractions scheduled on other days, while allowing that day's original attractions to remain candidates. The updated day is persisted without changing the other days.

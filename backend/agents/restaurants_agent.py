@@ -44,26 +44,23 @@ class RestaurantsAgent(BaseAgent):
         ) if search_results else "No web data"
 
         system_prompt = (
-            "You are a food expert. STRICT RULE: avg_cost_per_person_inr for every "
-            "restaurant MUST stay within the per-meal budget given. Never exceed it. "
-            "Return ONLY valid JSON array, nothing else."
+            "You are a food expert. Recommend a useful range of restaurants, prioritising "
+            "options that fit the user's budget but include other relevant choices when useful. "
+            "Never falsify or clamp price estimates. Return ONLY valid JSON array."
         )
         user_prompt = (
             "Recommend restaurants in " + destination + " for " + str(travelers) +
             " travelers.\n\n"
             "Web Search:\n" + web_ctx + "\n\n"
-            "=== HARD BUDGET CONSTRAINTS ===\n"
-            "Total food budget for the whole trip: Rs " + str(int(food_total)) + "\n"
-            "Food budget per day (all meals): Rs " + str(int(food_per_day)) + "\n"
-            "Max per person per meal: Rs " + str(int(meal_budget)) + "\n"
-            "You MUST NOT suggest restaurants above Rs " + str(int(meal_budget)) +
-            " per person.\n"
-            "Mix of Budget and Mid-range only — no Fine Dining.\n\n"
+            "=== BUDGET GUIDELINE (not a hard filter) ===\\n"
+            "Food budget per day: Rs " + str(int(food_per_day)) + "\\n"
+            "Suggested per-person per-meal budget: Rs " + str(int(meal_budget)) + "\\n"
+            "Prioritise affordable places, but do not hide useful options above this amount.\\n\\n"
             "Preferences: " + interests_str + "\n\n"
             "Return JSON array of 6-8 restaurants. Each must have:\n"
             "name, cuisine, description (2-3 sentences, must-try dishes),\n"
             "budget_level (Budget/Mid-range only),\n"
-            "avg_cost_per_person_inr (NUMBER, MUST be <= " + str(int(meal_budget)) + "),\n"
+            "avg_cost_per_person_inr (realistic NUMBER estimate, may exceed guideline),\n"
             "location, rating (3.5-5.0), specialties (array), atmosphere,\n"
             "best_time (breakfast/lunch/dinner/both), reservation_needed (true/false).\n\n"
             "Return ONLY the JSON array."
@@ -73,11 +70,11 @@ class RestaurantsAgent(BaseAgent):
         try:
             restaurants = json.loads(response)
             for i, r in enumerate(restaurants):
-                # Parse and CLAMP cost to meal ceiling
+                # Parse realistic estimated cost; retain above-guideline prices
                 try:
                     cost = float(r.get("avg_cost_per_person_inr", meal_budget) or meal_budget)
-                    cost = min(cost, meal_budget)
-                    r["avg_cost_per_person_inr"] = round(cost, 2)
+                    r["avg_cost_per_person_inr"] = round(max(0, cost), 2)
+                    r["over_budget_guideline"] = cost > meal_budget
                 except (ValueError, TypeError):
                     r["avg_cost_per_person_inr"] = round(meal_budget * 0.8, 2)
 

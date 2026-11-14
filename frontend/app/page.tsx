@@ -37,24 +37,33 @@ interface Restaurant {
   avg_cost_per_person_inr: number; location: string; rating: number
   specialties: string[]; atmosphere: string; best_time: string
   reservation_needed: boolean; image_url: string; maps_link: string
+  over_budget_guideline?: boolean
 }
 interface Hotel {
   name: string; category: string; description: string; location: string
   price_per_night_inr: number; total_estimated_inr: number; rating: number
   amenities: string[]; room_type: string; proximity: string
   booking_tip: string; image_url: string; maps_link: string
+  over_budget_guideline?: boolean
 }
 interface Activity {
   time: string; activity: string; description: string
   location: string; duration: string; cost_inr: number | string
   is_meal?: boolean; meal_type?: string
-  travel_note?: string; caution?: string
+  travel_note?: string; caution?: string; place_id?: string
+}
+interface AdditionalPlace {
+  name: string; description?: string; location?: string
+  reason?: string; schedule_status?: string; image_url?: string; maps_link?: string
 }
 interface DayPlan {
   day: number; title: string; weather_note: string
   actual_date?: string; date_label?: string
   activities: Activity[]
   meals: { breakfast: unknown; lunch: unknown; dinner: unknown }
+  additional_places?: AdditionalPlace[]
+  all_place_names?: string[]
+  route_warnings?: string[]
   estimated_cost_inr: number | string; tips: string
   has_event: boolean; event_name: string | null
 }
@@ -82,6 +91,7 @@ interface BudgetBreakdown {
   }
 }
 interface TravelPlan {
+  saved_trip_id?: number
   travel_details: TravelDetails; places: Place[]; restaurants: Restaurant[]
   hotels: Hotel[]; weather: Weather; itinerary: DayPlan[]
   budget_breakdown: BudgetBreakdown
@@ -251,7 +261,9 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
 //  PAST TRIP SUMMARY CARD
 // ═══════════════════════════════════════════════════════════════════════════════
 function PastTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: number) => void }) {
+  const [expanded, setExpanded] = useState(false)
   const ov = trip.overview_data
+  const plan = trip.full_plan
   const bb = ov?.budget_breakdown
 
   return (
@@ -272,10 +284,13 @@ function PastTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: numb
             <CardTitle className="text-xl">{trip.destination}</CardTitle>
             <CardDescription>{ov?.total_days} days · saved {trip.created_at?.slice(0, 10)}</CardDescription>
           </div>
-          <button onClick={() => onDelete(trip.id)}
-            className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete trip">
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {plan && <button onClick={() => setExpanded(v => !v)} className="text-sm text-blue-600 hover:text-blue-800">{expanded ? "Hide itinerary" : "View itinerary"}</button>}
+            <button onClick={() => onDelete(trip.id)}
+              className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete trip">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -328,9 +343,21 @@ function PastTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: numb
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground italic text-center">
-          Full itinerary details are shown for upcoming trips only
-        </p>
+        {expanded && plan && (
+          <div className="border-t pt-4 space-y-4">
+            <h4 className="font-semibold">Saved itinerary</h4>
+            {plan.itinerary?.map((day: DayPlan, index: number) => (
+              <div key={index} className="rounded-lg border p-3">
+                <p className="font-semibold">Day {day.day}: {day.title}</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {day.activities?.map((activity: Activity, i: number) => (
+                    <li key={i}>• {activity.time} — {activity.activity}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -578,7 +605,7 @@ function MyTripsPage({ user, onBack }: { user: AuthUser; onBack: () => void }) {
             <History className="h-6 w-6 text-blue-600" /> My Trips
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Upcoming trips show full details · Past trips show a summary overview
+            Your generated itineraries remain available until you manually delete them.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={onBack}>
@@ -604,7 +631,7 @@ function MyTripsPage({ user, onBack }: { user: AuthUser; onBack: () => void }) {
           <CardContent className="py-16 text-center">
             <Plane className="h-12 w-12 mx-auto text-gray-300 mb-4" />
             <p className="text-lg font-medium text-gray-500">No trips saved yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Generate a travel plan and save it to see it here</p>
+            <p className="text-sm text-muted-foreground mt-1">Your generated itineraries are saved automatically and remain here until you delete them.</p>
             <Button className="mt-4" onClick={onBack}>Plan Your First Trip</Button>
           </CardContent>
         </Card>
@@ -799,14 +826,13 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
               Est. cost: {typeof day.estimated_cost_inr === "number" ? fmt(day.estimated_cost_inr) : day.estimated_cost_inr}
             </CardDescription>
           </div>
-          {day.activities.length > 0 && (
-            <Button variant="outline" size="sm" disabled={isReopt}
-              onClick={() => onReopt(day.day, day.activities[day.activities.length - 1].activity)}>
+          <Button variant="outline" size="sm" disabled={isReopt}
+              onClick={() => onReopt(day.day, day.activities.length > 0
+                ? day.activities[day.activities.length - 1].activity : "")}>
               {isReopt
                 ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Re-optimizing...</>
                 : <><RotateCcw className="h-3 w-3 mr-1" />Re-optimize Day</>}
-            </Button>
-          )}
+          </Button>
         </div>
         {day.weather_note && (
           <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-sm text-sky-800">
@@ -847,6 +873,44 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
             </div>
           </div>
         ))}
+        {(day.route_warnings || []).length > 0 && (
+          <div className="space-y-2">
+            {(day.route_warnings || []).map((warning: string, idx: number) => (
+              <div key={idx} className="p-2 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                ⚠️ {warning}
+              </div>
+            ))}
+          </div>
+        )}
+        {(day.additional_places || []).length > 0 && (
+          <div className="mt-4 border rounded-lg p-3">
+            <h4 className="font-semibold text-sm mb-2">Additional places to explore</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              These attractions were found but could not be fitted into the timed route.
+              They are still available as suggestions.
+            </p>
+            <div className="space-y-3">
+              {(day.additional_places || []).map((place: any, idx: number) => (
+                <div key={idx} className="flex gap-3 text-sm">
+                  {place.image_url && (
+                    <img src={place.image_url} alt={place.name}
+                      className="h-14 w-14 object-cover rounded-md shrink-0"
+                      onError={e => { e.currentTarget.style.display = "none" }} />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium">{place.name}</p>
+                    {place.location && <p className="text-xs text-muted-foreground">{place.location}</p>}
+                    {place.reason && <p className="text-xs text-amber-700 mt-1">{place.reason}</p>}
+                    {place.maps_link && (
+                      <a className="text-xs text-blue-600 underline" href={place.maps_link}
+                        target="_blank" rel="noopener noreferrer">View on Maps</a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3 mt-4 bg-orange-50 rounded-lg p-3">
           {[
             { label: "Breakfast", val: day.meals.breakfast },
@@ -877,7 +941,7 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
 export default function Home() {
   // Auth
   const [user,       setUser]       = useState<AuthUser | null>(null)
-  const [showAuth,   setShowAuth]   = useState(false)
+  const [showAuth,   setShowAuth]   = useState(true)
   const [showTrips,  setShowTrips]  = useState(false)
 
   // Planner
@@ -895,13 +959,24 @@ export default function Home() {
   const [alertEmail,  setAlertEmail]  = useState("")
   const [alertStatus, setAlertStatus] = useState<"idle"|"sending"|"sent"|"error">("idle")
   const [alertMsg,    setAlertMsg]    = useState("")
+  const [weatherAlertsEnabled, setWeatherAlertsEnabled] = useState(true)
+  const [eventAlertsEnabled, setEventAlertsEnabled] = useState(true)
 
   // Restore session on load
   useEffect(() => {
     const stored = localStorage.getItem("trip_planner_user")
     if (stored) {
-      try { setUser(JSON.parse(stored)) } catch { localStorage.removeItem("trip_planner_user") }
-    }
+      try {
+        const parsed = JSON.parse(stored) as AuthUser
+        if (parsed?.token) {
+          fetch(API + "/api/auth/me", { headers: authHeaders(parsed.token) })
+            .then(r => { if (r.ok) { setUser(parsed); setShowAuth(false) }
+              else { localStorage.removeItem("trip_planner_user"); setUser(null); setShowAuth(true) } })
+            .catch(() => { setUser(parsed); setShowAuth(false) })
+        }
+        else { localStorage.removeItem("trip_planner_user"); setShowAuth(true) }
+      } catch { localStorage.removeItem("trip_planner_user"); setShowAuth(true) }
+    } else { setShowAuth(true) }
   }, [])
 
   const handleAuth = (u: AuthUser) => {
@@ -923,12 +998,13 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user) { setShowAuth(true); setError("Please sign in or create an account before generating an itinerary."); return }
     setLoading(true); setError(""); setTravelPlan(null); setLoadStep(0)
     const interval = setInterval(() => setLoadStep(s => s < LOADING_STEPS.length - 1 ? s + 1 : s), 3500)
     try {
       const res  = await fetch(API + "/api/plan_travel", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(user.token),
         body: JSON.stringify({ user_input: userInput }),
       })
       const data = await res.json()
@@ -953,17 +1029,19 @@ export default function Home() {
         .filter((_, i) => i !== dayNumber - 1)
         .flatMap(d => d.activities
           .filter((a: Activity) => !a.is_meal)
-          .map((a: Activity) => a.activity)
+          .map((a: Activity) => a.activity.trim())
         )
 
       const res  = await fetch(API + "/api/reoptimize_day", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(user!.token),
         body: JSON.stringify({
           day_number: dayNumber, removed_attraction: removedAttraction,
           travel_details: travelPlan.travel_details, places: travelPlan.places,
           restaurants: travelPlan.restaurants, weather: travelPlan.weather,
           used_places: usedOnOtherDays,
+          trip_id: travelPlan.saved_trip_id,
+          full_plan: travelPlan,
         }),
       })
       const data = await res.json()
@@ -979,16 +1057,15 @@ export default function Home() {
   }
 
   const saveForAlerts = async () => {
-    if (!travelPlan || !alertEmail) return
-    if (!/\S+@\S+\.\S+/.test(alertEmail)) { setAlertStatus("error"); setAlertMsg("Enter a valid email"); return }
+    if (!travelPlan) return
+    if (!user) { setShowAuth(true); setAlertStatus("error"); setAlertMsg("Please sign in first."); return }
     setAlertStatus("sending")
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" }
-      if (user) headers["Authorization"] = "Bearer " + user.token
+      const headers: Record<string, string> = authHeaders(user.token)
       const res = await fetch(API + "/api/save_trip", {
         method: "POST", headers,
         body: JSON.stringify({
-          email:           alertEmail,
+          trip_id:         travelPlan.saved_trip_id,
           destination:     travelPlan.travel_details.destination,
           duration:        travelPlan.travel_details.duration,
           travel_details:  travelPlan.travel_details,
@@ -996,6 +1073,8 @@ export default function Home() {
           full_plan:       travelPlan,
           start_date:      startDate,
           end_date:        endDate,
+          weather_alerts:  weatherAlertsEnabled,
+          event_alerts:    eventAlertsEnabled,
         }),
       })
       const data = await res.json()
@@ -1095,7 +1174,7 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading || !user}>
                 {loading
                   ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{LOADING_STEPS[loadStep]}</>
                   : <><Plane className="mr-2 h-4 w-4" />Generate Travel Plan</>}
@@ -1160,8 +1239,8 @@ export default function Home() {
                 🔔 Save Trip & Get Alerts
               </CardTitle>
               <CardDescription className="text-indigo-700">
-                Save your trip to view it later in "My Trips" and get email alerts every 6 hours for weather changes and new events.
-                {!user && <span className="ml-1 font-medium">Sign in to link the trip to your account.</span>}
+                Save your trip to view it later in "My Trips" and receive selected weather and event email alerts. Checks run every 6 hours while the backend service is active.
+                <span className="ml-1 font-medium">Your itinerary is automatically saved to your account.</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1188,12 +1267,10 @@ export default function Home() {
                         className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <input type="email" placeholder="your@email.com" value={alertEmail}
-                      onChange={e => { setAlertEmail(e.target.value); setAlertStatus("idle") }}
-                      className="flex-1 min-w-[200px] border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <span className="text-sm text-indigo-800">Alerts will be sent to <strong>{user?.email}</strong></span>
                     <Button onClick={saveForAlerts}
-                      disabled={alertStatus === "sending" || !alertEmail}
+                      disabled={alertStatus === "sending" || !user}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white">
                       {alertStatus === "sending"
                         ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</>
@@ -1205,10 +1282,17 @@ export default function Home() {
                       <AlertTriangle className="h-4 w-4" /> {alertMsg}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-4 text-xs text-indigo-600">
-                    <span>🌧️ Rain / storm alerts</span>
-                    <span>🥵 Extreme heat alerts</span>
-                    <span>🎉 New event alerts</span>
+                  <div className="flex flex-wrap gap-4 text-xs text-indigo-700">
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={weatherAlertsEnabled}
+                        onChange={e => setWeatherAlertsEnabled(e.target.checked)} />
+                      🌦️ Weather change alerts
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={eventAlertsEnabled}
+                        onChange={e => setEventAlertsEnabled(e.target.checked)} />
+                      🎉 Event update alerts
+                    </label>
                     <span>📁 View in My Trips after login</span>
                   </div>
                 </>
@@ -1299,6 +1383,11 @@ export default function Home() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-sm">{r.description}</p>
+                      {r.over_budget_guideline && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                          Above the suggested food budget. Shown as an optional recommendation.
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div><span className="text-muted-foreground">Per person: </span>{fmt(r.avg_cost_per_person_inr)}</div>
                         <div><span className="text-muted-foreground">Vibe: </span>{r.atmosphere}</div>
@@ -1335,6 +1424,11 @@ export default function Home() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <p className="text-sm">{h.description}</p>
+                      {h.over_budget_guideline && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                          Above the suggested accommodation budget. Shown as an optional recommendation.
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div><span className="text-muted-foreground">Per night: </span>{fmt(h.price_per_night_inr)}</div>
                         <div className="font-semibold"><span className="text-muted-foreground font-normal">Total: </span>{fmt(h.total_estimated_inr)}</div>

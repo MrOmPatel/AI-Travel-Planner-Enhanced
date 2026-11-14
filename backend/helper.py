@@ -1,5 +1,11 @@
 import os
+import re
+import json
+import time
+import hashlib
 import requests
+from difflib import SequenceMatcher
+from pathlib import Path
 from urllib.parse import quote
 from dotenv import load_dotenv
 
@@ -155,6 +161,114 @@ class Helper:
         url = _picsum_url(query)
         print("Picsum fallback: " + query[:40])
         return [url]
+
+    def geocode_place(self, place_name: str, locality: str = "", destination: str = "",
+                      evidence=None) -> tuple:
+        """Resolve a named POI with Nominatim; return (lat, lon) or None.
+
+        Search terms are generated from the supplied place and live Tavily evidence;
+        there is deliberately no manually maintained alias list. Results are cached
+        only after name/locality validation. Public Nominatim is throttled to 1 req/sec.
+        """
+        name = str(place_name or "").strip()
+        if not name:
+            return None
+        locality = str(locality or "").strip()
+        destination = str(destination or "").strip()
+        cache_path = Path(__file__).resolve().parent / ".geocode_cache.json"
+        try:
+            cache = json.loads(cache_path.read_text()) if cache_path.exists() else {}
+        except Exception:
+            cache = {}
+        cache_key = hashlib.sha256("|".join((name.lower(), locality.lower(), destination.lower())).encode()).hexdigest()
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and cached.get("verified"):
+            return float(cached["lat"]), float(cached["lon"])
+
+        # Tavily titles/snippets can expose a canonical name used by geographic data.
+        # These are runtime candidates, not a hand-maintained alias dictionary.
+        search_terms = [name]
+        for item in (evidence or []):
+            title = str(item.get("title", "")).strip() if isinstance(item, dict) else ""
+            content = str(item.get("content", "")) if isinstance(item, dict) else ""
+            if title and len(title) <= 110:
+                search_terms.append(title)
+            # Extract quoted/heading-like proper-name phrases from relevant snippets.
+            for phrase in re.findall(r"(?:^|[.!?])\s*([A-Z][A-Za-z0-9&'’ -]{3,65})", content):
+                phrase = phrase.strip(" -,:;")
+                if phrase and len(phrase.split()) <= 8:
+                    search_terms.append(phrase)
+        unique_terms = []
+        seen = set()
+        for term in search_terms:
+            key = re.sub(r"\W+", " ", term.lower()).strip()
+            if key and key not in seen:
+                seen.add(key); unique_terms.append(term)
+        locality_tokens = {t for t in re.findall(r"[a-z0-9]+", locality.lower()) if len(t) > 2}
+        destination_tokens = {t for t in re.findall(r"[a-z0-9]+", destination.lower()) if len(t) > 2}
+        name_tokens = {t for t in re.findall(r"[a-z0-9]+", name.lower()) if len(t) > 2}
+
+        # Keep the public Nominatim endpoint below its one-request-per-second policy.
+        for term in unique_terms[:3]:
+            query = ", ".join(x for x in (term, locality, destination) if x)
+            try:
+                time.sleep(1.1)
+                response = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": query, "format": "jsonv2", "addressdetails": 1,
+                            "namedetails": 1, "extratags": 1, "limit": 5},
+                    headers={"User-Agent": "AITripPlanner/1.0 (travel itinerary geocoding)"},
+                    timeout=10
+                )
+                if response.status_code == 429:
+                    print("Nominatim rate limit reached; skipping geocode for " + name)
+                    return None
+                response.raise_for_status()
+                candidates = response.json()
+            except Exception as exc:
+                print("Nominatim lookup failed for " + name + ": " + str(exc))
+                candidates = []
+            for candidate in candidates:
+                display = str(candidate.get("display_name", ""))
+                namedetails = candidate.get("namedetails") or {}
+                candidate_names = [candidate.get("name", "")] + [
+                    v for k, v in namedetails.items() if k in ("name", "name:en", "official_name", "short_name", "alt_name")
+                ]
+                candidate_names = [str(v) for v in candidate_names if v]
+                best = max((SequenceMatcher(None, name.lower(), v.lower()).ratio() for v in candidate_names), default=0.0)
+                token_match = len(name_tokens.intersection(set(re.findall(r"[a-z0-9]+", (" ".join(candidate_names)).lower())))) / max(1, len(name_tokens))
+                # If Tavily supplied a canonical title, compare that query term too.
+                term_score = max((SequenceMatcher(None, term.lower(), v.lower()).ratio() for v in candidate_names), default=0.0)
+                score = max(best, 0.65 * token_match + 0.35 * term_score)
+                address = candidate.get("address") or {}
+                address_text = " ".join(str(v) for v in address.values()).lower() + " " + display.lower()
+                locality_match = (any(t in address_text for t in locality_tokens)
+                                  if locality_tokens else
+                                  (not destination_tokens or any(t in address_text for t in destination_tokens)))
+                if score < 0.48 or not locality_match:
+                    continue
+                try:
+                    lat, lon = float(candidate["lat"]), float(candidate["lon"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180) or (lat == 0 and lon == 0):
+                    continue
+                # Reject broad administrative areas when the requested attraction is a POI.
+                category = str(candidate.get("category", "")).lower()
+                ctype = str(candidate.get("type", "")).lower()
+                if category in ("boundary", "place") and ctype in ("administrative", "city", "town", "village", "county", "state") and score < 0.85:
+                    continue
+                cache[cache_key] = {"lat": lat, "lon": lon, "verified": True,
+                                    "display_name": display, "matched_name": candidate_names[0] if candidate_names else term}
+                try:
+                    cache_path.write_text(json.dumps(cache, indent=2))
+                except Exception:
+                    pass
+                print(f"[GEOCODE VERIFIED] {name} -> {lat}, {lon} ({display[:90]})")
+                return lat, lon
+            time.sleep(1.1)
+        print("[GEOCODE UNVERIFIED] " + name + " — no sufficiently reliable Nominatim match")
+        return None
 
     def get_maps_link(self, place_name: str, city: str = "") -> str:
         query = (place_name + " " + city).strip()

@@ -20,6 +20,9 @@ def init_db():
             baseline_weather TEXT    NOT NULL DEFAULT '{}',
             full_plan        TEXT    NOT NULL DEFAULT '{}',
             last_event_hash  TEXT    DEFAULT '',
+            last_weather_snapshot TEXT DEFAULT '{}',
+            weather_alerts   INTEGER NOT NULL DEFAULT 1,
+            event_alerts     INTEGER NOT NULL DEFAULT 1,
             last_checked     TEXT    DEFAULT (datetime('now')),
             created_at       TEXT    DEFAULT (datetime('now'))
         )
@@ -31,6 +34,9 @@ def init_db():
         ("end_date",    "TEXT DEFAULT NULL"),
         ("full_plan",   "TEXT DEFAULT '{}'"),
         ("user_id",     "INTEGER DEFAULT NULL"),
+        ("last_weather_snapshot", "TEXT DEFAULT '{}'"),
+        ("weather_alerts", "INTEGER NOT NULL DEFAULT 1"),
+        ("event_alerts", "INTEGER NOT NULL DEFAULT 1"),
     ]:
         if col not in cols:
             con.execute("ALTER TABLE saved_trips ADD COLUMN " + col + " " + defn)
@@ -43,17 +49,22 @@ def save_trip(email: str, destination: str, duration: int,
               travel_details: dict, baseline_weather: dict,
               full_plan: dict = None,
               start_date: str = None, end_date: str = None,
-              user_id: int = None) -> int:
+              user_id: int = None,
+              weather_alerts: bool = True,
+              event_alerts: bool = True) -> int:
     con = sqlite3.connect(DB_PATH)
     cur = con.execute(
         """INSERT INTO saved_trips
            (email, destination, duration, travel_details, baseline_weather,
-            full_plan, start_date, end_date, user_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            full_plan, start_date, end_date, user_id,
+            weather_alerts, event_alerts, last_weather_snapshot)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (email.strip().lower(), destination, duration,
          json.dumps(travel_details), json.dumps(baseline_weather),
          json.dumps(full_plan or {}),
-         start_date, end_date, user_id)
+         start_date, end_date, user_id,
+         1 if weather_alerts else 0, 1 if event_alerts else 0,
+         json.dumps(baseline_weather or {}))
     )
     trip_id = cur.lastrowid
     con.commit(); con.close()
@@ -97,17 +108,27 @@ def get_all_trips() -> list:
     return [dict(r) for r in rows]
 
 
-def update_last_checked(trip_id: int, last_event_hash: str = None):
+def update_monitoring_state(trip_id: int, last_event_hash=None,
+                            last_weather_snapshot=None):
+    """Persist alert baselines after successful checks; omitted values stay unchanged."""
     con = sqlite3.connect(DB_PATH)
+    assignments = ["last_checked=datetime('now')"]
+    values = []
     if last_event_hash is not None:
-        con.execute(
-            "UPDATE saved_trips SET last_checked=datetime('now'), last_event_hash=? WHERE id=?",
-            (last_event_hash, trip_id))
-    else:
-        con.execute(
-            "UPDATE saved_trips SET last_checked=datetime('now') WHERE id=?",
-            (trip_id,))
-    con.commit(); con.close()
+        assignments.append("last_event_hash=?")
+        values.append(last_event_hash)
+    if last_weather_snapshot is not None:
+        assignments.append("last_weather_snapshot=?")
+        values.append(json.dumps(last_weather_snapshot))
+    values.append(trip_id)
+    con.execute("UPDATE saved_trips SET " + ", ".join(assignments) + " WHERE id=?", values)
+    con.commit()
+    con.close()
+
+
+def update_last_checked(trip_id: int, last_event_hash: str = None):
+    """Backward-compatible wrapper retained for older callers."""
+    update_monitoring_state(trip_id, last_event_hash=last_event_hash)
 
 
 def delete_trip(trip_id: int, email: str):
@@ -116,3 +137,36 @@ def delete_trip(trip_id: int, email: str):
     con.execute("DELETE FROM saved_trips WHERE id=? AND email=?",
                 (trip_id, email.strip().lower()))
     con.commit(); con.close()
+
+
+def update_trip_alert_preferences(trip_id: int, user_id: int, weather_alerts: bool, event_alerts: bool, start_date: str = None, end_date: str = None) -> bool:
+    con = sqlite3.connect(DB_PATH)
+    cur = con.execute(
+        "UPDATE saved_trips SET weather_alerts=?, event_alerts=?, start_date=COALESCE(NULLIF(?, ''), start_date), end_date=COALESCE(NULLIF(?, ''), end_date) WHERE id=? AND user_id=?",
+        (1 if weather_alerts else 0, 1 if event_alerts else 0, start_date, end_date, trip_id, user_id)
+    )
+    con.commit(); changed = cur.rowcount > 0; con.close()
+    return changed
+
+
+def update_trip_full_plan(trip_id: int, user_id: int, full_plan: dict) -> bool:
+    con = sqlite3.connect(DB_PATH)
+    cur = con.execute(
+        "UPDATE saved_trips SET full_plan=? WHERE id=? AND user_id=?",
+        (json.dumps(full_plan or {}), trip_id, user_id)
+    )
+    con.commit(); changed = cur.rowcount > 0; con.close()
+    return changed
+
+
+def get_trip_by_id_for_user(trip_id: int, user_id: int) -> dict | None:
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute("SELECT * FROM saved_trips WHERE id=? AND user_id=?", (trip_id, user_id)).fetchone()
+    con.close()
+    if not row: return None
+    trip = dict(row)
+    for key in ("travel_details", "baseline_weather", "full_plan"):
+        try: trip[key] = json.loads(trip.get(key) or "{}")
+        except (TypeError, ValueError): trip[key] = {}
+    return trip

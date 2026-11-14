@@ -17,13 +17,17 @@ class ItineraryAgent(BaseAgent):
         tavily_key = os.getenv("TAVILY_API_KEY")
         self.tavily = TavilyClient(api_key=tavily_key) if tavily_key else None
 
-    def _fetch_events(self, destination: str) -> str:
+    def _fetch_events(self, destination: str, start_date: str = None,
+                      end_date: str = None) -> str:
         if not self.tavily:
             return "No event data"
         try:
+            date_scope = (" between " + start_date + " and " + end_date
+                          if start_date and end_date else " in the next month")
             resp = self.tavily.search(
-                "upcoming events festivals things happening in " + destination + " this week this month",
-                max_results=3)
+                "upcoming public events festivals cultural events in " + destination +
+                date_scope + ". Include event dates and venue; exclude past events.",
+                max_results=5)
             results = resp.get("results", [])
             if not results:
                 return "No event data"
@@ -73,7 +77,8 @@ class ItineraryAgent(BaseAgent):
         daily_total_cap = round((env["food_total"] + env["activities_total"]) / duration, 2)
 
         weather_ctx = self._weather_context(weather)
-        events_ctx  = self._fetch_events(destination)
+        trip_end = trip_start + timedelta(days=max(duration - 1, 0))
+        events_ctx  = self._fetch_events(destination, trip_start.isoformat(), trip_end.isoformat())
 
         # ── PATH A: real algorithm output — LLM narrative only ────────────────
         if algo_days:
@@ -83,14 +88,21 @@ class ItineraryAgent(BaseAgent):
                                 interests_str, travelers, day_dates, trip_start,
                                 daily_total_cap)
 
-        # ── PATH B: fallback — full LLM generation ────────────────────────────
-        print("ItineraryAgent: no algo_days — using full LLM generation (fallback)")
-        return self._llm_generate(
-            destination, duration, interests_str, travelers, raw_start,
-            day_dates, days_until, season, weather_ctx, events_ctx,
-            places, restaurants, daily_total_cap, daily_food, meal_pp,
-            act_per_day, trip_start
+        # ── PATH B: deterministic recovery; never let free-form LLM output
+        # invent restaurant/hotel stops or silently omit discovered attractions.
+        print("ItineraryAgent: no algo_days — rebuilding deterministic schedule")
+        from algorithms import run_algorithm_pipeline
+        recovered_days = run_algorithm_pipeline(
+            places=places or [],
+            restaurants=[],
+            travel_details=travel_details,
+            weather=weather or {},
+            env=env,
         )
+        return self._enrich(
+            recovered_days, destination, events_ctx, weather_ctx,
+            interests_str, travelers, day_dates, trip_start, daily_total_cap
+        ) if recovered_days else []
 
     # ── PATH A ────────────────────────────────────────────────────────────────
     def _enrich(self, algo_days, destination, events_ctx, weather_ctx,
@@ -130,22 +142,49 @@ class ItineraryAgent(BaseAgent):
             "    location (string), duration (string), cost_inr (number),\n"
             "    is_meal (bool), travel_note (string), caution (string))\n"
             "  meals (object: {breakfast: string, lunch: string, dinner: string})\n"
+            "  additional_places (array — preserve all unscheduled attractions and their reasons)\n"
             "  estimated_cost_inr (NUMBER — keep EXACTLY as in schedule, do not change)\n"
             "  tips (string — one practical tip)\n"
             "  has_event (bool), event_name (string or null)\n\n"
             "CRITICAL: In activities, use key 'activity' (not 'name') for the place name.\n"
-            "Return ONLY the JSON array."
+            "Return ONLY a valid JSON object with this shape: {\\\"days\\\":[...]}."
         )
 
-        response = self.clean_json(self.invoke(system_prompt, user_prompt))
         try:
-            enriched = json.loads(response)
+            response = self.clean_json(self.invoke_json(system_prompt, user_prompt))
+            parsed = json.loads(response)
+            enriched = parsed.get("days", []) if isinstance(parsed, dict) else parsed
+            if not isinstance(enriched, list):
+                raise ValueError("Enrichment response must contain a days array.")
+            # Keep the algorithm's day count authoritative. LLM output may enrich
+            # existing days but must never remove a day or its activities.
+            while len(enriched) < len(algo_days):
+                enriched.append({})
+            enriched = [
+                item if isinstance(item, dict) else {}
+                for item in enriched[:len(algo_days)]
+            ]
             # Re-stamp authoritative values from algo_days
             for i, day in enumerate(enriched):
                 if i < len(algo_days):
                     src = algo_days[i]
+                    day["day"] = src.get("day", i + 1)
+                    day["title"] = day.get("title") or src.get("title") or (
+                        "Day " + str(i + 1) + " — " +
+                        src.get("date_label", day_dates[i] if i < len(day_dates) else "")
+                    )
                     day["actual_date"] = src.get("actual_date","")
                     day["date_label"]  = src.get("date_label", day_dates[i] if i < len(day_dates) else "")
+                    # Algorithm output is authoritative. Preserve fields that the
+                    # narrative model is not allowed to restructure or remove.
+                    day["meals"] = src.get("meals", {})
+                    day["additional_places"] = src.get("additional_places", [])
+                    day["all_place_names"] = src.get("all_place_names", [])
+                    day["route_warnings"] = src.get("route_warnings", [])
+                    day["weather_note"] = src.get("weather_note", day.get("weather_note", ""))
+                    day["tips"] = day.get("tips") or src.get("tips", "")
+                    day["has_event"] = bool(day.get("has_event", src.get("has_event", False)))
+                    day["event_name"] = day.get("event_name", src.get("event_name"))
                     try:
                         orig = float(src.get("estimated_cost_inr", 0) or 0)
                         # Report the actual estimated spend, even when it exceeds
@@ -158,6 +197,8 @@ class ItineraryAgent(BaseAgent):
                     # we overlay the original field values to guarantee correctness.
                     src_acts = src.get("activities", [])
                     llm_acts = day.get("activities", [])
+                    if not isinstance(llm_acts, list):
+                        llm_acts = []
                     if not llm_acts:
                         # LLM returned no activities at all — use algo_days directly
                         day["activities"] = src_acts
@@ -178,6 +219,7 @@ class ItineraryAgent(BaseAgent):
                                     "meal_type":   src_act.get("meal_type", ""),
                                     "travel_note": src_act.get("travel_note", ""),
                                     "caution":     src_act.get("caution", ""),
+                                    "place_id":    src_act.get("place_id", ""),
                                     # Narrative — from LLM (enriched)
                                     "description": llm_act.get("description",
                                                     src_act.get("description", "")),
@@ -186,8 +228,8 @@ class ItineraryAgent(BaseAgent):
                                 merged.append(src_act)
                         day["activities"] = merged
             return enriched
-        except json.JSONDecodeError as e:
-            print("JSON error (enrich): " + str(e) + " — returning raw algo days")
+        except Exception as e:
+            print("Itinerary enrichment failed: " + str(e) + " — returning algorithm schedule")
             for i, day in enumerate(algo_days):
                 if i < len(day_dates):
                     day.setdefault("title", "Day " + str(day["day"]) + " — " + day_dates[i])
