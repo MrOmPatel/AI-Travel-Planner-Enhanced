@@ -220,7 +220,7 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
               <Plane className="h-7 w-7 text-white" />
             </div>
           </div>
-          <CardTitle className="text-2xl">AI Trip Planner</CardTitle>
+          <CardTitle className="text-2xl">AI Travel Planner</CardTitle>
           <CardDescription>
             {mode === "login" ? "Welcome back! Sign in to your account" : "Create your account to start planning"}
           </CardDescription>
@@ -919,6 +919,7 @@ function DayCard({ day, places, reoptLoading, reoptDay, onReopt }: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+
 //  MAIN APP
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Home() {
@@ -955,6 +956,7 @@ export default function Home() {
   const [alertMsg,    setAlertMsg]    = useState("")
   const [weatherAlertsEnabled, setWeatherAlertsEnabled] = useState(true)
   const [eventAlertsEnabled, setEventAlertsEnabled] = useState(true)
+
 
   // Restore session on load
   useEffect(() => {
@@ -1081,12 +1083,12 @@ export default function Home() {
   if (showTrips && user) {
     return (
       <div className="my-trips-shell min-h-screen mx-auto p-4 sm:p-6 max-w-6xl">
-        <div className="my-trips-topbar flex items-center justify-between mb-7 rounded-2xl border border-violet-100/80 bg-white/85 px-5 py-4 shadow-sm backdrop-blur-xl">
+        <div className="my-trips-topbar shared-nav-width flex items-center justify-between mb-7 rounded-2xl border border-violet-100/80 bg-white/85 px-5 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-violet-200">
               <Plane className="h-4 w-4 text-white" />
             </div>
-            <span className="font-bold text-lg">AI Trip Planner</span>
+            <span className="font-bold text-lg">AI Travel Planner</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">Hi, {user.name}</span>
@@ -1101,17 +1103,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfaff] text-[#17152f]">
+    <div className="relative min-h-screen bg-[#fbfaff] text-[#17152f]">
       {showAuth && <AuthModal onAuth={handleAuth} />}
 
       {/* Navigation */}
-      <header className="relative z-20 border-b border-white/50 bg-white/75 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
+      <header className={!travelPlan ? "landing-nav" : "relative z-20 border-b border-white/50 bg-white/75 backdrop-blur-xl"}>
+        <div className={!travelPlan
+          ? "landing-nav-inner shared-nav-width mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8"
+          : "mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8"}>
           <a href="#" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg shadow-violet-200">
               <Plane className="h-5 w-5" />
             </div>
-            <span className="text-lg font-extrabold tracking-tight sm:text-xl">AI Travel Planner</span>
+            <span className="text-lg font-bold tracking-tight">AI Travel Planner</span>
           </a>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-700 md:flex">
             <a href="#plan" className="transition hover:text-violet-700">Plan a Trip</a>
@@ -1324,7 +1328,13 @@ export default function Home() {
           </section>
 
           <footer className="border-t border-violet-100 bg-white">
-            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 py-7 text-center text-xs text-slate-500 sm:flex-row sm:text-left lg:px-8">
+            <p className="mx-auto max-w-4xl px-4 pt-5 text-center text-[11px] leading-relaxed text-slate-400 sm:text-xs">
+              Note: Some images may be representative rather than actual photographs
+              of the locations. AI-generated itineraries and recommendations may
+              contain inaccuracies. Please verify important travel details before
+              your trip.
+            </p>
+            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 py-5 text-center text-xs text-slate-500 sm:flex-row sm:text-left lg:px-8">
               <span className="font-bold text-slate-700">AI Travel Planner</span>
               <span>Plan thoughtfully. Travel meaningfully.</span>
               <button onClick={() => document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })} className="font-semibold text-violet-700 hover:text-violet-900">Start planning ↑</button>
