@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Travel Planner",
-  description: "Created By Satender Maurya",
+  title: "AI Travel Planner | Plan Smarter Trips",
+  description: "Plan personalized, practical trips with AI-powered itineraries, smart route grouping, and travel updates.",
 };
 
 export default function RootLayout({

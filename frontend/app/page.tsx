@@ -5,7 +5,8 @@ import {
   RefreshCw, Thermometer, CloudRain, Sun, Cloud, Wind, Zap,
   Clock, IndianRupee, AlertTriangle, CheckCircle2, PartyPopper,
   RotateCcw, LogIn, LogOut, UserPlus, History, Eye, Trash2,
-  ChevronDown, ChevronUp, Lock, Mail, User
+  ChevronDown, ChevronUp, Lock, Mail, User, Camera, ArrowUpRight,
+  Coffee, Compass, Sparkles
 } from 'lucide-react'
 import { Button }   from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -159,6 +160,29 @@ const LOADING_STEPS = [
   "Almost done — finalising your plan!",
 ]
 
+const HERO_SLIDES = [
+  {
+    image: "https://images.unsplash.com/photo-1602643163983-ed0babc39797?auto=format&fit=crop&w=2200&q=90",
+    label: "Rajasthan, India",
+  },
+  {
+    image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=2200&q=90",
+    label: "Kyoto, Japan",
+  },
+  {
+    image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=2200&q=90",
+    label: "Paris, France",
+  },
+  {
+    image: "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=2200&q=90",
+    label: "Santorini, Greece",
+  },
+  {
+    image: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=2200&q=90",
+    label: "Cape Town, South Africa",
+  },
+]
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  AUTH MODAL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -188,11 +212,11 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md shadow-2xl">
+    <div className="auth-overlay fixed inset-0 flex items-center justify-center z-50 p-4">
+      <Card className="auth-card w-full max-w-md shadow-2xl">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-3">
-            <div className="h-14 w-14 rounded-full bg-blue-600 flex items-center justify-center">
+            <div className="auth-mark h-14 w-14 rounded-full flex items-center justify-center">
               <Plane className="h-7 w-7 text-white" />
             </div>
           </div>
@@ -203,15 +227,15 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
         </CardHeader>
         <CardContent className="space-y-4 pt-2">
           {/* Mode toggle */}
-          <div className="flex rounded-lg border overflow-hidden">
+          <div className="auth-mode-switch flex rounded-lg border overflow-hidden">
             <button onClick={() => { setMode("login"); setError("") }}
               className={"flex-1 py-2 text-sm font-medium transition-colors " +
-                (mode === "login" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
+                (mode === "login" ? "bg-violet-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
               <LogIn className="h-4 w-4 inline mr-1" /> Sign In
             </button>
             <button onClick={() => { setMode("signup"); setError("") }}
               className={"flex-1 py-2 text-sm font-medium transition-colors " +
-                (mode === "signup" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
+                (mode === "signup" ? "bg-violet-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50")}>
               <UserPlus className="h-4 w-4 inline mr-1" /> Sign Up
             </button>
           </div>
@@ -220,20 +244,20 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
             <div className="relative">
               <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
               <input placeholder="Your full name" value={name} onChange={e => setName(e.target.value)}
-                className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
           )}
           <div className="relative">
             <Mail className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input type="email" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
           <div className="relative">
             <Lock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input type="password" placeholder={mode === "signup" ? "Password (min 6 chars)" : "Password"}
               value={password} onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === "Enter" && submit()}
-              className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
 
           {error && (
@@ -243,7 +267,7 @@ function AuthModal({ onAuth }: { onAuth: (u: AuthUser) => void }) {
           )}
 
           <Button onClick={submit} disabled={loading || !email || !password || (mode === "signup" && !name)}
-            className="w-full bg-blue-600 hover:bg-blue-700">
+            className="auth-submit w-full bg-blue-600 hover:bg-violet-700">
             {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Please wait...</>
               : mode === "login" ? "Sign In" : "Create Account"}
           </Button>
@@ -285,7 +309,7 @@ function PastTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: numb
             <CardDescription>{ov?.total_days} days · saved {trip.created_at?.slice(0, 10)}</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {plan && <button onClick={() => setExpanded(v => !v)} className="text-sm text-blue-600 hover:text-blue-800">{expanded ? "Hide itinerary" : "View itinerary"}</button>}
+            {plan && <button onClick={() => setExpanded(v => !v)} className="text-sm text-violet-600 hover:text-violet-800">{expanded ? "Hide itinerary" : "View itinerary"}</button>}
             <button onClick={() => onDelete(trip.id)}
               className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete trip">
               <Trash2 className="h-4 w-4" />
@@ -375,13 +399,13 @@ function UpcomingTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: 
   const bb = plan.budget_breakdown
 
   return (
-    <Card className="border-blue-200">
+    <Card className="border-violet-200">
       {/* Header row */}
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Badge className="bg-blue-600 text-white text-xs">🗓 Upcoming</Badge>
+              <Badge className="bg-violet-600 text-white text-xs">🗓 Upcoming</Badge>
               {trip.start_date && trip.end_date && (
                 <span className="text-xs text-muted-foreground">{trip.start_date} → {trip.end_date}</span>
               )}
@@ -393,7 +417,7 @@ function UpcomingTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: 
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setExpanded(e => !e)}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
+              className="flex items-center gap-1 text-sm text-violet-600 hover:text-violet-800 font-medium">
               {expanded ? <><ChevronUp className="h-4 w-4" />Hide</> : <><Eye className="h-4 w-4" />View Full Plan</>}
             </button>
             <button onClick={() => onDelete(trip.id)}
@@ -447,7 +471,7 @@ function UpcomingTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: 
           )}
 
           {/* Full plan tabs */}
-          <Tabs defaultValue="itinerary">
+          <Tabs defaultValue="itinerary" className="itinerary-tabs">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="itinerary"><Calendar className="h-3 w-3 mr-1" />Itinerary</TabsTrigger>
               <TabsTrigger value="places"><MapPin className="h-3 w-3 mr-1" />Places</TabsTrigger>
@@ -455,46 +479,15 @@ function UpcomingTripCard({ trip, onDelete }: { trip: SavedTrip; onDelete: (id: 
               <TabsTrigger value="hotels"><Hotel className="h-3 w-3 mr-1" />Hotels</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="itinerary" className="space-y-3 mt-3">
+            <TabsContent value="itinerary" className="space-y-4 mt-3">
               {plan.itinerary.map((day, i) => (
-                <div key={i} className="border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline">Day {day.day}</Badge>
-                    <span className="font-semibold text-sm">{day.title}</span>
-                    {day.has_event && day.event_name && (
-                      <Badge className="bg-purple-600 text-white text-xs">
-                        <PartyPopper className="h-3 w-3 mr-1" />{day.event_name}
-                      </Badge>
-                    )}
-                  </div>
-                  {day.weather_note && (
-                    <p className="text-xs text-sky-700 bg-sky-50 p-2 rounded mb-2">{day.weather_note}</p>
-                  )}
-                  <div className="space-y-2">
-                    {day.activities.map((a, j) => (
-                      <div key={j} className="flex gap-2 text-sm">
-                        <Badge variant="secondary" className="text-xs shrink-0">{a.time}</Badge>
-                        <div>
-                          <span className="font-medium">{a.activity}</span>
-                          <span className="text-muted-foreground ml-2">{a.location}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-3 text-xs bg-orange-50 rounded p-2">
-                    {[
-                      { l: "Breakfast", v: day.meals.breakfast },
-                      { l: "Lunch",     v: day.meals.lunch     },
-                      { l: "Dinner",    v: day.meals.dinner    },
-                    ].map(m => (
-                      <div key={m.l}>
-                        <p className="font-semibold">{m.l}</p>
-                        <p className="text-muted-foreground">{mealStr(m.v)}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {day.tips && <p className="text-xs text-amber-700 mt-2">💡 {day.tips}</p>}
-                </div>
+                <DayCard
+                  key={i}
+                  day={day}
+                  places={plan.places || []}
+                  reoptLoading={false}
+                  reoptDay={null}
+                />
               ))}
             </TabsContent>
 
@@ -598,19 +591,28 @@ function MyTripsPage({ user, onBack }: { user: AuthUser; onBack: () => void }) {
   const past     = trips.filter(t => t.status === "past")
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <History className="h-6 w-6 text-blue-600" /> My Trips
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Your generated itineraries remain available until you manually delete them.
-          </p>
+    <div className="my-trips-page space-y-8">
+      <section className="my-trips-hero relative overflow-hidden rounded-[30px] px-6 py-8 text-white sm:px-9 sm:py-10">
+        <div className="my-trips-hero-orb" aria-hidden="true" />
+        <div className="relative z-10 flex flex-col justify-between gap-7 md:flex-row md:items-end">
+          <div className="max-w-2xl">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-200">Your personal travel journal</p>
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Every journey, <span className="font-serif italic text-amber-200">beautifully</span> kept.</h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-violet-100/90">Revisit the places you have planned, pick up where your next adventure begins, and keep all your travel details in one place.</p>
+          </div>
+          <Button onClick={onBack} className="h-11 rounded-full bg-white px-6 font-semibold text-violet-800 shadow-lg shadow-black/10 hover:bg-violet-50">
+            <Plane className="mr-2 h-4 w-4" /> Plan a new journey
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={onBack}>
-          <Plane className="h-4 w-4 mr-1" /> Plan New Trip
-        </Button>
+        <div className="relative z-10 mt-8 grid max-w-lg grid-cols-3 gap-3 border-t border-white/15 pt-5">
+          <div><p className="text-2xl font-semibold">{trips.length}</p><p className="mt-1 text-[11px] uppercase tracking-wider text-violet-200">All journeys</p></div>
+          <div><p className="text-2xl font-semibold">{upcoming.length}</p><p className="mt-1 text-[11px] uppercase tracking-wider text-violet-200">Upcoming</p></div>
+          <div><p className="text-2xl font-semibold">{past.length}</p><p className="mt-1 text-[11px] uppercase tracking-wider text-violet-200">Completed</p></div>
+        </div>
+      </section>
+      <div className="my-trips-section-intro flex items-center justify-between gap-3">
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Your collection</p><h3 className="mt-1 text-xl font-semibold tracking-tight">Trips worth remembering</h3></div>
+        <span className="rounded-full border border-violet-100 bg-white px-3 py-1.5 text-xs font-medium text-violet-700">Private to your account</span>
       </div>
 
       {loading && (
@@ -640,7 +642,7 @@ function MyTripsPage({ user, onBack }: { user: AuthUser; onBack: () => void }) {
       {!loading && upcoming.length > 0 && (
         <div className="space-y-4">
           <h3 className="font-semibold text-lg flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-blue-500 inline-block"></span>
+            <span className="h-2 w-2 rounded-full bg-violet-500 inline-block"></span>
             Upcoming Trips ({upcoming.length})
           </h3>
           {upcoming.map(t => <UpcomingTripCard key={t.id} trip={t} onDelete={deleteTrip} />)}
@@ -675,7 +677,7 @@ function WeatherPanel({ weather }: { weather: Weather }) {
     </Card>
   )
   return (
-    <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+    <Card className="border-violet-200 bg-gradient-to-r from-blue-50 to-sky-50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-blue-800 flex-wrap">
           {weatherIcon(weather.condition)}
@@ -802,9 +804,9 @@ const isUnverifiedLocationWarning = (message?: string) =>
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DAY CARD (with re-optimize)
 // ═══════════════════════════════════════════════════════════════════════════════
-function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
-  day: DayPlan; reoptLoading: boolean; reoptDay: number | null
-  onReopt: (dayNum: number, removed: string) => void
+function DayCard({ day, places, reoptLoading, reoptDay, onReopt }: {
+  day: DayPlan; places: Place[]; reoptLoading: boolean; reoptDay: number | null
+  onReopt?: (dayNum: number, removed: string) => void
 }) {
   const isReopt = reoptLoading && reoptDay === day.day
   const hasActivityLocationWarning = day.activities.some(
@@ -813,135 +815,104 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
   const visibleRouteWarnings = (day.route_warnings || []).filter(
     warning => !(hasActivityLocationWarning && isUnverifiedLocationWarning(warning))
   )
+  const findPlace = (act: Activity) => places.find(place =>
+    (act.place_id && (place as any).id === act.place_id) ||
+    place.name.trim().toLowerCase() === act.activity.trim().toLowerCase()
+  )
+  const heroPlace = day.activities.map(findPlace).find(place => place?.image_url)
+  const meals = [
+    { label: "Breakfast", val: day.meals.breakfast, time: "08:00", icon: Coffee },
+    { label: "Lunch", val: day.meals.lunch, time: "13:00", icon: UtensilsCrossed },
+    { label: "Dinner", val: day.meals.dinner, time: "19:00", icon: UtensilsCrossed },
+  ]
   return (
-    <Card className={day.has_event ? "border-purple-300 bg-purple-50/30" : ""}>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2 flex-wrap">
-              Day {day.day}: {day.title}
-              {day.has_event && day.event_name && (
-                <Badge className="bg-purple-600 text-white">
-                  <PartyPopper className="h-3 w-3 mr-1" />{day.event_name}
-                </Badge>
-              )}
-            </CardTitle>
-            {day.date_label && (
-              <p className="text-xs text-blue-600 font-medium mt-0.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" />{day.date_label}
-              </p>
-            )}
-            <CardDescription className="mt-1">
-              Est. cost: {typeof day.estimated_cost_inr === "number" ? fmt(day.estimated_cost_inr) : day.estimated_cost_inr}
-            </CardDescription>
+    <Card className={`itinerary-day-card overflow-hidden ${day.has_event ? "itinerary-day-event" : ""}`}>
+      <div className="itinerary-day-heading">
+        {heroPlace?.image_url ? (
+          <img src={heroPlace.image_url} alt={heroPlace.name} className="itinerary-day-cover"
+            onError={e => { e.currentTarget.style.display = "none" }} />
+        ) : <div className="itinerary-day-cover itinerary-day-cover-fallback"><Compass className="h-10 w-10" /></div>}
+        <div className="itinerary-day-cover-shade" />
+        <div className="itinerary-day-heading-content">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="itinerary-day-kicker">DAY {day.day}</span>
+            {day.has_event && day.event_name && <Badge className="bg-white/15 text-white border border-white/25"><PartyPopper className="h-3 w-3 mr-1" />{day.event_name}</Badge>}
           </div>
-          <Button variant="outline" size="sm" disabled={isReopt}
-              onClick={() => onReopt(day.day, day.activities.length > 0
-                ? day.activities[day.activities.length - 1].activity : "")}>
-              {isReopt
-                ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Re-optimizing...</>
-                : <><RotateCcw className="h-3 w-3 mr-1" />Re-optimize Day</>}
-          </Button>
+          <h3 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-white sm:text-3xl">{day.title}</h3>
+          {day.date_label && <p className="mt-1 flex items-center gap-1.5 text-sm text-white/80"><Calendar className="h-4 w-4" />{day.date_label}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span className="itinerary-day-cost">Estimated day cost · {typeof day.estimated_cost_inr === "number" ? fmt(day.estimated_cost_inr) : day.estimated_cost_inr}</span>
+            {onReopt && (
+<Button variant="secondary" size="sm" disabled={isReopt}
+              onClick={() => onReopt?.(day.day, day.activities.length > 0 ? day.activities[day.activities.length - 1].activity : "")}
+              className="rounded-full bg-white/95 text-violet-800 hover:bg-white">
+              {isReopt ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Re-optimizing...</> : <><RotateCcw className="h-3 w-3 mr-1" />Re-optimize day</>}
+            </Button>
+)}
+          </div>
         </div>
+      </div>
+
+      <CardContent className="itinerary-day-content space-y-6">
         {day.weather_note && (
-          <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-sky-50 border border-sky-200 text-sm text-sky-800">
-            <Cloud className="h-4 w-4 mt-0.5 shrink-0" /><span>{day.weather_note}</span>
-          </div>
+          <div className="itinerary-weather-note"><Cloud className="h-4 w-4 shrink-0" /><span>{day.weather_note}</span></div>
         )}
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {day.activities.map((act, idx) => (
-          <div key={idx} className="border-l-4 border-blue-200 pl-4">
-            <div className="flex gap-3 flex-wrap">
-              <Badge variant="outline" className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />{act.time}
-              </Badge>
-              <div className="flex-1">
-                <h4 className="font-semibold">{act.activity}</h4>
-                <p className="text-sm text-muted-foreground mt-1">{act.description}</p>
-                <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{act.location}</span>
-                  <span>{act.duration}</span>
-                  <span className="font-medium text-foreground">
-                    {typeof act.cost_inr === "number" && act.cost_inr > 0 ? fmt(act.cost_inr)
-                      : typeof act.cost_inr === "string" ? act.cost_inr : "Free"}
-                  </span>
-                  {act.travel_note && (
-                    <span className="flex items-center gap-1 text-amber-700">
-                      <AlertTriangle className="h-3 w-3 shrink-0" />{act.travel_note}
-                    </span>
-                  )}
-                </div>
-                {act.caution && !(
-                  isUnverifiedLocationWarning(act.travel_note) &&
-                  isUnverifiedLocationWarning(act.caution)
-                ) && (
-                  <div className="mt-2 flex items-start gap-2 p-2 rounded-md bg-amber-50 border border-amber-300 text-sm text-amber-800">
-                    <span className="shrink-0">⚠️</span>
-                    <span>{act.caution}</span>
+
+        <section>
+          <div className="itinerary-section-heading">
+            <div><p className="itinerary-section-eyebrow">YOUR DAY, AT A GLANCE</p><h4>Places to discover</h4></div>
+            <span className="itinerary-count-pill">{day.activities.length} {day.activities.length === 1 ? "stop" : "stops"}</span>
+          </div>
+          <div className="itinerary-activity-list">
+            {day.activities.map((act, idx) => {
+              const place = findPlace(act)
+              return (
+                <article key={idx} className="itinerary-activity-item">
+                  <div className="itinerary-activity-rail"><span className="itinerary-time-pill">{act.time}</span><span className="itinerary-rail-line" /></div>
+                  <div className="itinerary-activity-card">
+                    {place?.image_url ? <img src={place.image_url} alt={act.activity} className="itinerary-activity-image" onError={e => { e.currentTarget.style.display = "none" }} /> : <div className="itinerary-activity-image itinerary-activity-image-fallback"><Camera className="h-6 w-6" /></div>}
+                    <div className="min-w-0 flex-1 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0"><h5 className="font-semibold text-[#24183f]">{act.activity}</h5><p className="mt-1 text-sm leading-5 text-slate-600">{act.description}</p></div>
+                        <span className="itinerary-activity-cost">{typeof act.cost_inr === "number" && act.cost_inr > 0 ? fmt(act.cost_inr) : typeof act.cost_inr === "string" ? act.cost_inr : "Free"}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-violet-500" />{act.location}</span>
+                        <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-violet-500" />{act.duration}</span>
+                        {place?.maps_link && <a href={place.maps_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-violet-700 hover:text-violet-900">View on Maps <ArrowUpRight className="h-3 w-3" /></a>}
+                      </div>
+                      {act.travel_note && <div className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />{act.travel_note}</div>}
+                      {act.caution && !(isUnverifiedLocationWarning(act.travel_note) && isUnverifiedLocationWarning(act.caution)) && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">⚠️ {act.caution}</div>}
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </article>
+              )
+            })}
           </div>
-        ))}
-        {visibleRouteWarnings.length > 0 && (
-          <div className="space-y-2">
-            {visibleRouteWarnings.map((warning: string, idx: number) => (
-              <div key={idx} className="p-2 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-800">
-                ⚠️ {warning}
-              </div>
-            ))}
+        </section>
+
+        {visibleRouteWarnings.length > 0 && <div className="space-y-2">{visibleRouteWarnings.map((warning: string, idx: number) => <div key={idx} className="itinerary-route-warning"><AlertTriangle className="h-4 w-4 shrink-0" />{warning}</div>)}</div>}
+
+        <section className="itinerary-meals-section">
+          <div className="itinerary-section-heading"><div><p className="itinerary-section-eyebrow">PAUSE & REFUEL</p><h4>Meals along the way</h4></div><UtensilsCrossed className="h-5 w-5 text-violet-500" /></div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {meals.map(m => { const MealIcon = m.icon; return <div key={m.label} className="itinerary-meal-card"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm font-semibold text-[#30234d]"><MealIcon className="h-4 w-4 text-violet-600" />{m.label}</span><span className="text-xs font-medium text-violet-600">{m.time}</span></div><p className="mt-2 text-sm leading-5 text-slate-600">{mealStr(m.val)}</p></div> })}
           </div>
-        )}
+        </section>
+
         {(day.additional_places || []).length > 0 && (
-          <div className="mt-4 border rounded-lg p-3">
-            <h4 className="font-semibold text-sm mb-2">Additional places to explore</h4>
-            <p className="text-xs text-muted-foreground mb-3">
-              These attractions were found but could not be fitted into the timed route.
-              They are still available as suggestions.
-            </p>
-            <div className="space-y-3">
-              {(day.additional_places || []).map((place: any, idx: number) => (
-                <div key={idx} className="flex gap-3 text-sm">
-                  {place.image_url && (
-                    <img src={place.image_url} alt={place.name}
-                      className="h-14 w-14 object-cover rounded-md shrink-0"
-                      onError={e => { e.currentTarget.style.display = "none" }} />
-                  )}
-                  <div className="min-w-0">
-                    <p className="font-medium">{place.name}</p>
-                    {place.location && <p className="text-xs text-muted-foreground">{place.location}</p>}
-                    {place.reason && <p className="text-xs text-amber-700 mt-1">{place.reason}</p>}
-                    {place.maps_link && (
-                      <a className="text-xs text-blue-600 underline" href={place.maps_link}
-                        target="_blank" rel="noopener noreferrer">View on Maps</a>
-                    )}
-                  </div>
-                </div>
-              ))}
+          <section className="itinerary-discovery-section">
+            <div className="itinerary-section-heading"><div><p className="itinerary-section-eyebrow">IF YOU HAVE EXTRA TIME</p><h4>More to explore</h4></div><span className="itinerary-count-pill">{day.additional_places?.length} places</span></div>
+            <p className="mb-4 text-sm text-slate-500">These attractions were found but could not be fitted into the timed route. They remain available as suggestions.</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(day.additional_places || []).map((place: AdditionalPlace, idx: number) => <div key={idx} className="itinerary-extra-place">
+                {place.image_url ? <img src={place.image_url} alt={place.name} onError={e => { e.currentTarget.style.display = "none" }} /> : <div className="itinerary-extra-placeholder"><Camera className="h-5 w-5" /></div>}
+                <div className="min-w-0 flex-1"><p className="font-semibold text-[#2b2045]">{place.name}</p>{place.location && <p className="mt-1 text-xs text-slate-500">{place.location}</p>}{place.reason && <p className="mt-2 text-xs leading-5 text-amber-700">{place.reason}</p>}{place.maps_link && <a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-violet-700" href={place.maps_link} target="_blank" rel="noopener noreferrer">Explore on Maps <ArrowUpRight className="h-3 w-3" /></a>}</div>
+              </div>)}
             </div>
-          </div>
+          </section>
         )}
-        <div className="grid grid-cols-3 gap-3 mt-4 bg-orange-50 rounded-lg p-3">
-          {[
-            { label: "Breakfast", val: day.meals.breakfast },
-            { label: "Lunch",     val: day.meals.lunch     },
-            { label: "Dinner",    val: day.meals.dinner    },
-          ].map(m => (
-            <div key={m.label}>
-              <p className="font-semibold text-sm flex items-center gap-1">
-                <UtensilsCrossed className="h-3 w-3" />{m.label}
-              </p>
-              <p className="text-sm text-muted-foreground">{mealStr(m.val)}</p>
-            </div>
-          ))}
-        </div>
-        {day.tips && (
-          <div className="border p-3 rounded-lg bg-amber-50 text-sm">
-            <span className="font-semibold">💡 Tip: </span>{day.tips}
-          </div>
-        )}
+        {day.tips && <div className="itinerary-day-tip"><Sparkles className="h-4 w-4 shrink-0" /><div><strong>Local tip</strong><p>{day.tips}</p></div></div>}
       </CardContent>
     </Card>
   )
@@ -953,8 +924,19 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
 export default function Home() {
   // Auth
   const [user,       setUser]       = useState<AuthUser | null>(null)
-  const [showAuth,   setShowAuth]   = useState(true)
+  const [showAuth,   setShowAuth]   = useState(false)
   const [showTrips,  setShowTrips]  = useState(false)
+  const [heroImageIndex, setHeroImageIndex] = useState(0)
+
+  // Rotate destination photography gently; respect reduced-motion preferences.
+  useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduceMotion) return
+    const interval = window.setInterval(() => {
+      setHeroImageIndex(index => (index + 1) % HERO_SLIDES.length)
+    }, 7000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   // Planner
   const [userInput,    setUserInput]    = useState("")
@@ -983,12 +965,12 @@ export default function Home() {
         if (parsed?.token) {
           fetch(API + "/api/auth/me", { headers: authHeaders(parsed.token) })
             .then(r => { if (r.ok) { setUser(parsed); setShowAuth(false) }
-              else { localStorage.removeItem("trip_planner_user"); setUser(null); setShowAuth(true) } })
+              else { localStorage.removeItem("trip_planner_user"); setUser(null); setShowAuth(false) } })
             .catch(() => { setUser(parsed); setShowAuth(false) })
         }
-        else { localStorage.removeItem("trip_planner_user"); setShowAuth(true) }
-      } catch { localStorage.removeItem("trip_planner_user"); setShowAuth(true) }
-    } else { setShowAuth(true) }
+        else { localStorage.removeItem("trip_planner_user"); setShowAuth(false) }
+      } catch { localStorage.removeItem("trip_planner_user"); setShowAuth(false) }
+    } else { setShowAuth(false) }
   }, [])
 
   const handleAuth = (u: AuthUser) => {
@@ -1098,10 +1080,10 @@ export default function Home() {
   // If showing My Trips page
   if (showTrips && user) {
     return (
-      <div className="container mx-auto p-4 max-w-4xl">
-        <div className="flex items-center justify-between mb-6">
+      <div className="my-trips-shell min-h-screen mx-auto p-4 sm:p-6 max-w-6xl">
+        <div className="my-trips-topbar flex items-center justify-between mb-7 rounded-2xl border border-violet-100/80 bg-white/85 px-5 py-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-violet-200">
               <Plane className="h-4 w-4 text-white" />
             </div>
             <span className="font-bold text-lg">AI Trip Planner</span>
@@ -1119,92 +1101,252 @@ export default function Home() {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-6xl">
+    <div className="min-h-screen bg-[#fbfaff] text-[#17152f]">
       {showAuth && <AuthModal onAuth={handleAuth} />}
 
-      {/* Top nav */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center">
-            <Plane className="h-4 w-4 text-white" />
-          </div>
-          <span className="font-bold text-lg">AI Trip Planner</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {user ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setShowTrips(true)}>
-                <History className="h-4 w-4 mr-1" />My Trips
+      {/* Navigation */}
+      <header className="relative z-20 border-b border-white/50 bg-white/75 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
+          <a href="#" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg shadow-violet-200">
+              <Plane className="h-5 w-5" />
+            </div>
+            <span className="text-lg font-extrabold tracking-tight sm:text-xl">AI Travel Planner</span>
+          </a>
+          <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-700 md:flex">
+            <a href="#plan" className="transition hover:text-violet-700">Plan a Trip</a>
+            <a href="#features" className="transition hover:text-violet-700">Features</a>
+            <a href="#destinations" className="transition hover:text-violet-700">Destinations</a>
+            {user && <button onClick={() => setShowTrips(true)} className="transition hover:text-violet-700">My Trips</button>}
+          </nav>
+          <div className="flex items-center gap-2">
+            {user ? (
+              <>
+                <span className="hidden text-sm text-slate-600 sm:inline">Hi, {user.name}</span>
+                <Button variant="outline" size="sm" onClick={() => setShowTrips(true)} className="rounded-full border-violet-200 bg-white">My Trips</Button>
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden sm:inline-flex">Logout</Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setShowAuth(true)} className="rounded-full border-violet-200 bg-white px-4 text-violet-700 hover:bg-violet-50">
+                Sign in
               </Button>
-              <span className="text-sm text-muted-foreground hidden sm:inline">Hi, {user.name}</span>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-1" />Logout
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={() => setShowAuth(true)} className="bg-blue-600 hover:bg-blue-700">
-              <LogIn className="h-4 w-4 mr-1" />Sign In / Sign Up
+            )}
+            <Button size="sm" onClick={() => document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })}
+              className="rounded-full bg-violet-700 px-4 text-white shadow-md shadow-violet-200 hover:bg-violet-800">
+              Get started <span className="ml-1">→</span>
             </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Header */}
-      {!travelPlan && (
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Plan Your Perfect Trip</h1>
-          <p className="text-muted-foreground">
-            Weather-aware · Live INR pricing · Event detection · Email alerts · Trip history
-          </p>
-          <div className="flex flex-wrap justify-center gap-2 mt-3">
-            {["🌤 Live Weather", "💱 Live INR Rate", "🎉 Event Detection", "🔄 Re-optimize Days", "📧 Email Alerts", "📁 Trip History"].map(f => (
-              <Badge key={f} variant="secondary" className="text-xs">{f}</Badge>
-            ))}
           </div>
         </div>
-      )}
+      </header>
 
-      {/* Input form */}
       {!travelPlan && (
-        <Card className="max-w-3xl mx-auto">
-          <CardHeader>
-            <CardTitle>Describe Your Dream Trip</CardTitle>
-            <CardDescription>Tell us your destination, duration, budget (USD or ₹), and interests</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Textarea
-                placeholder="e.g. Plan a 5-day trip to Jaipur for 2 people with Rs 50,000 budget. We love history, forts, and street food..."
-                value={userInput} onChange={e => setUserInput(e.target.value)}
-                className="min-h-[130px]" required />
-              <div className="flex flex-wrap gap-2">
-                {["Jaipur 5 days ₹45,000", "Goa 4 days ₹38,000", "Paris 6 days $3000", "Tokyo 7 days $4000"].map(q => (
-                  <button key={q} type="button"
-                    className="text-xs px-2 py-1 rounded-full border hover:bg-blue-50 text-blue-700 border-blue-200"
-                    onClick={() => setUserInput("Plan a trip to " + q + " for 2 people")}>
-                    {q}
+        <>
+          {/* Hero */}
+          <section className="travel-hero relative isolate overflow-hidden">
+            <div className="absolute inset-0 -z-20 overflow-hidden bg-slate-200" aria-label="Rotating destination photography">
+              {HERO_SLIDES.map((slide, index) => (
+                <div
+                  key={slide.label}
+                  role="img"
+                  aria-label={slide.label}
+                  className={`hero-slide absolute inset-0 bg-cover bg-center ${index === heroImageIndex ? "is-active" : ""}`}
+                  style={{ backgroundImage: `url("${slide.image}")` }}
+                />
+              ))}
+            </div>
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fffaf2]/95 via-[#fff7ee]/82 to-[#fff7ee]/18" />
+            <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#2b1b32]/20 via-transparent to-white/10" />
+            <div className="absolute bottom-5 right-6 z-10 hidden items-center gap-2 rounded-full border border-white/50 bg-white/70 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur sm:flex">
+              <span>{HERO_SLIDES[heroImageIndex].label}</span>
+              <span className="mx-1 h-3 w-px bg-slate-300" />
+              <div className="flex items-center gap-1.5" aria-label="Choose hero image">
+                {HERO_SLIDES.map((slide, index) => (
+                  <button key={slide.label} type="button" onClick={() => setHeroImageIndex(index)}
+                    aria-label={`Show ${slide.label}`} aria-pressed={index === heroImageIndex}
+                    className={`h-2 rounded-full transition-all ${index === heroImageIndex ? "w-5 bg-violet-700" : "w-2 bg-slate-400/70 hover:bg-violet-500"}`} />
+                ))}
+              </div>
+            </div>
+            <div className="mx-auto max-w-7xl px-5 pb-12 pt-14 sm:pt-20 lg:px-8 lg:pb-16">
+              <div className="max-w-2xl">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/75 px-4 py-2 text-xs font-bold tracking-wide text-violet-800 shadow-sm backdrop-blur">
+                  <span className="text-violet-600">✦</span> AI-POWERED · PERSONALIZED · WORLDWIDE
+                </div>
+                <h1 className="max-w-xl text-4xl font-black leading-[1.08] tracking-tight text-[#17152f] sm:text-5xl lg:text-6xl">
+                  Plan smarter trips <span className="text-violet-700">around the world.</span>
+                </h1>
+                <p className="mt-5 max-w-xl text-base leading-7 text-slate-700 sm:text-lg">
+                  Discover remarkable places worldwide, build practical day-wise itineraries, and stay prepared with weather, events and travel updates — all in one place.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold text-slate-800">
+                  {[
+                    ["✧", "Personalized itineraries"],
+                    ["☼", "Weather & event alerts"],
+                    ["⌖", "Smart route grouping"],
+                    ["☆", "Attraction coverage"],
+                  ].map(([icon, label]) => (
+                    <span key={label} className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-2 shadow-sm backdrop-blur">
+                      <span className="text-base text-violet-700">{icon}</span>{label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Planner */}
+              <div id="plan" className="mt-10 scroll-mt-8 rounded-[2rem] border border-white/80 bg-white/95 p-5 shadow-[0_24px_80px_-32px_rgba(40,25,80,0.38)] backdrop-blur-xl sm:p-7">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-700">Your next adventure</p>
+                    <h2 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Plan your next trip</h2>
+                  </div>
+                  <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700">✨ Your trip, thoughtfully planned</span>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <label htmlFor="trip-prompt" className="text-sm font-semibold text-slate-700">Where would you like to go?</label>
+                  <Textarea
+                    id="trip-prompt"
+                    placeholder="e.g. Plan a 5-day trip to Kyoto for 2 people with a $2,500 budget. We love temples, food and local culture..."
+                    value={userInput} onChange={e => setUserInput(e.target.value)}
+                    className="min-h-[112px] resize-y rounded-2xl border-slate-200 bg-[#fdfcff] p-4 text-sm leading-6 shadow-inner focus-visible:ring-violet-500" required />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="mr-1 self-center text-xs font-semibold text-slate-500">Try:</span>
+                      {["Paris · 5 days · $3,000", "Tokyo · 6 days · $3,500", "Bali · 5 days · $2,000"].map(q => (
+                        <button key={q} type="button"
+                          className="rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-800 transition hover:border-violet-400 hover:bg-violet-50"
+                          onClick={() => setUserInput("Plan a trip to " + q.replaceAll("·", "").replaceAll("  ", " ") + " for 2 people")}>
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                    <Button type="submit" disabled={loading}
+                      className="h-12 rounded-xl bg-gradient-to-r from-violet-700 to-indigo-700 px-6 text-sm font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5 hover:from-violet-800 hover:to-indigo-800">
+                      {loading
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{LOADING_STEPS[loadStep]}</>
+                        : <>Generate itinerary <span className="ml-2">→</span></>}
+                    </Button>
+                  </div>
+                </form>
+                {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+                {!user && <p className="mt-3 text-xs text-slate-500">You'll be asked to sign in when you generate your itinerary. Your trip history stays with your account.</p>}
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+                <span className="mr-1 font-bold text-slate-800">Popular destinations</span>
+                {["Paris", "Tokyo", "Bali", "Cape Town", "Istanbul"].map(city => (
+                  <button key={city} type="button" onClick={() => setUserInput(`Plan a 3-day trip to ${city} for 2 travelers. Include major attractions, local food and a balanced budget.`)}
+                    className="rounded-full border border-white/80 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-violet-300 hover:text-violet-800">
+                    {city}
                   </button>
                 ))}
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading || !user}>
-                {loading
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{LOADING_STEPS[loadStep]}</>
-                  : <><Plane className="mr-2 h-4 w-4" />Generate Travel Plan</>}
-              </Button>
-            </form>
-            {error && <div className="mt-4 p-4 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>}
-          </CardContent>
-        </Card>
+            </div>
+          </section>
+
+          {/* Product value proposition */}
+          <section id="features" className="mx-auto max-w-7xl scroll-mt-8 px-5 py-16 lg:px-8 lg:py-20">
+            <div className="mx-auto mb-10 max-w-2xl text-center">
+              <span className="rounded-full bg-violet-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-violet-700">Travel planning, reimagined</span>
+              <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">More than an itinerary generator</h2>
+              <p className="mt-3 text-slate-600">Thoughtful planning that helps turn a destination into a trip you can actually follow.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { icon: "✦", title: "Personalized plans", desc: "Day-wise suggestions shaped around your interests, budget and travel duration." },
+                { icon: "☼", title: "Weather & event alerts", desc: "Stay informed about relevant weather changes and events during your trip." },
+                { icon: "⌖", title: "Smarter daily routes", desc: "Group nearby attractions sensibly and respect practical visiting hours." },
+                { icon: "▤", title: "One trip workspace", desc: "Explore places, food and stays, then revisit saved plans in your trip history." },
+              ].map(item => (
+                <div key={item.title} className="rounded-3xl border border-violet-100 bg-white p-6 shadow-[0_12px_35px_-28px_rgba(50,30,90,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-2xl text-violet-700">{item.icon}</div>
+                  <h3 className="mt-5 text-lg font-extrabold">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Destinations */}
+          <section id="destinations" className="bg-white py-16 lg:py-20">
+            <div className="mx-auto max-w-7xl px-5 lg:px-8">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-700">Find your somewhere</p>
+                  <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Where will you go next?</h2>
+                </div>
+                <p className="max-w-md text-sm leading-6 text-slate-600">Choose a starting point. You can personalize the trip with your own dates, interests and budget.</p>
+              </div>
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                {[
+                  { name: "Paris", sub: "Art, cafés & iconic streets", image: "photo-1502602898657-3e91760cbb34" },
+                  { name: "Kyoto", sub: "Temples & quiet gardens", image: "photo-1493976040374-85c8e12f0c0e" },
+                  { name: "Bali", sub: "Island escapes & rice terraces", image: "photo-1537996194471-e657df975ab4" },
+                  { name: "Cape Town", sub: "Coastlines & mountain views", image: "photo-1580060839134-75a5edca2e99" },
+                  { name: "Istanbul", sub: "Historic quarters & bazaars", image: "photo-1524231757912-21f4fe3a7200" },
+                ].map(place => (
+                  <button key={place.name} type="button" onClick={() => { setUserInput(`Plan a 3-day trip to ${place.name} for 2 travelers with popular attractions and local experiences.`); document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" }) }}
+                    className="group relative h-64 overflow-hidden rounded-3xl text-left shadow-md">
+                    <img src={`https://images.unsplash.com/${place.image}?auto=format&fit=crop&w=700&q=85`} alt={place.name}
+                      className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                      <h3 className="text-xl font-extrabold">{place.name}</h3>
+                      <p className="mt-1 text-xs text-white/85">{place.sub}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* How it works */}
+          <section className="mx-auto max-w-7xl px-5 py-16 lg:px-8 lg:py-20">
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="rounded-full bg-violet-100 px-4 py-2 text-xs font-bold text-violet-700">HOW IT WORKS</span>
+              <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Your trip in three simple steps</h2>
+              <p className="mt-3 text-slate-600">From a travel idea to a considered itinerary in minutes.</p>
+            </div>
+            <div className="mt-10 grid gap-5 md:grid-cols-3">
+              {[
+                { n: "01", icon: "▤", title: "Tell us your plan", desc: "Share your destination, dates, budget, group size and interests." },
+                { n: "02", icon: "✧", title: "Let AI organize it", desc: "Discover attractions and arrange them into practical day-wise plans." },
+                { n: "03", icon: "⌖", title: "Explore with confidence", desc: "Review places, food, stays, weather and updates in one workspace." },
+              ].map(step => (
+                <div key={step.n} className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black tracking-widest text-violet-300">{step.n}</span>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-2xl text-violet-700">{step.icon}</span>
+                  </div>
+                  <h3 className="mt-6 text-xl font-extrabold">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{step.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <footer className="border-t border-violet-100 bg-white">
+            <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 py-7 text-center text-xs text-slate-500 sm:flex-row sm:text-left lg:px-8">
+              <span className="font-bold text-slate-700">AI Travel Planner</span>
+              <span>Plan thoughtfully. Travel meaningfully.</span>
+              <button onClick={() => document.getElementById("plan")?.scrollIntoView({ behavior: "smooth" })} className="font-semibold text-violet-700 hover:text-violet-900">Start planning ↑</button>
+            </div>
+          </footer>
+        </>
       )}
 
       {/* Results */}
       {travelPlan && (
-        <div className="space-y-6">
+        <div className="itinerary-shell mx-auto max-w-6xl space-y-7 px-4 py-7 sm:px-6">
+          <div className="itinerary-page-intro flex flex-wrap items-center justify-between gap-3">
+            <div><p className="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-600">Your journey, thoughtfully planned</p><p className="mt-1 text-sm text-slate-500">A little inspiration. A lot less planning.</p></div>
+            <span className="rounded-full border border-violet-100 bg-white px-3 py-1.5 text-xs font-medium text-violet-700 shadow-sm">Personalised travel plan</span>
+          </div>
           {/* Summary header */}
-          <Card className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
-            <CardHeader>
-              <CardTitle className="text-2xl text-white">{travelPlan.travel_details.destination}</CardTitle>
-              <CardDescription className="text-blue-100">{travelPlan.travel_details.overview}</CardDescription>
+          <Card className="itinerary-summary relative overflow-hidden border-0 bg-gradient-to-br from-[#211443] via-[#433078] to-[#312b67] text-white shadow-2xl shadow-violet-200/70">
+            <div className="itinerary-summary-glow" aria-hidden="true" />
+            <CardHeader className="relative z-10">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-200">Your next destination</p>
+              <CardTitle className="font-serif text-3xl font-medium tracking-tight text-white sm:text-4xl">{travelPlan.travel_details.destination}</CardTitle>
+              <CardDescription className="mt-2 max-w-3xl text-sm leading-6 text-violet-100">{travelPlan.travel_details.overview}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1214,14 +1356,14 @@ export default function Home() {
                   { label: "Travelers", val: String(travelPlan.travel_details.travelers)   },
                   { label: "Type",      val: travelPlan.travel_details.travel_type         },
                 ].map(i => (
-                  <div key={i.label}>
-                    <p className="text-xs text-blue-200">{i.label}</p>
-                    <p className="text-lg font-bold text-white">{i.val}</p>
+                  <div key={i.label} className="itinerary-stat-tile">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-200">{i.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{i.val}</p>
                   </div>
                 ))}
                 {travelPlan.travel_details.start_date && (
                   <div className="col-span-2">
-                    <p className="text-xs text-blue-200">Trip Dates</p>
+                    <p className="text-xs text-violet-200">Trip Dates</p>
                     <p className="text-base font-bold text-white">
                       {travelPlan.travel_details.start_date} → {travelPlan.travel_details.end_date}
                       {typeof travelPlan.travel_details.days_until_trip === "number" &&
@@ -1322,12 +1464,12 @@ export default function Home() {
             </TabsList>
 
             <TabsContent value="itinerary" className="space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-blue-200">
+              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg text-sm text-blue-800 border border-violet-200">
                 <RefreshCw className="h-4 w-4 shrink-0" />
                 <span>Each day has a <strong>Re-optimize</strong> button — click it to swap the last attraction and regenerate that day in real time.</span>
               </div>
               {travelPlan.itinerary.map((day, i) => (
-                <DayCard key={i} day={day} reoptLoading={reoptLoading}
+                <DayCard key={i} day={day} places={travelPlan.places} reoptLoading={reoptLoading}
                   reoptDay={reoptDay} onReopt={handleReoptimize} />
               ))}
             </TabsContent>
