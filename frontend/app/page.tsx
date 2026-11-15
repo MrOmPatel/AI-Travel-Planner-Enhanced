@@ -5,7 +5,7 @@ import {
   RefreshCw, Thermometer, CloudRain, Sun, Cloud, Wind, Zap,
   Clock, IndianRupee, AlertTriangle, CheckCircle2, PartyPopper,
   RotateCcw, LogIn, LogOut, UserPlus, History, Eye, Trash2,
-  ChevronDown, ChevronUp, Lock, Mail, User, Navigation
+  ChevronDown, ChevronUp, Lock, Mail, User
 } from 'lucide-react'
 import { Button }   from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -796,6 +796,9 @@ function BudgetPanel({ bb }: { bb: BudgetBreakdown }) {
   )
 }
 
+const isUnverifiedLocationWarning = (message?: string) =>
+  Boolean(message && /(?:unverified|not\s+verified).{0,60}(?:location|coordinates?)|(?:location|coordinates?).{0,60}(?:unverified|not\s+verified)/i.test(message))
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DAY CARD (with re-optimize)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -804,6 +807,12 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
   onReopt: (dayNum: number, removed: string) => void
 }) {
   const isReopt = reoptLoading && reoptDay === day.day
+  const hasActivityLocationWarning = day.activities.some(
+    act => isUnverifiedLocationWarning(act.travel_note)
+  )
+  const visibleRouteWarnings = (day.route_warnings || []).filter(
+    warning => !(hasActivityLocationWarning && isUnverifiedLocationWarning(warning))
+  )
   return (
     <Card className={day.has_event ? "border-purple-300 bg-purple-50/30" : ""}>
       <CardHeader>
@@ -858,12 +867,15 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
                       : typeof act.cost_inr === "string" ? act.cost_inr : "Free"}
                   </span>
                   {act.travel_note && (
-                    <span className="flex items-center gap-1 text-blue-600">
-                      <Navigation className="h-3 w-3" />{act.travel_note}
+                    <span className="flex items-center gap-1 text-amber-700">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />{act.travel_note}
                     </span>
                   )}
                 </div>
-                {act.caution && (
+                {act.caution && !(
+                  isUnverifiedLocationWarning(act.travel_note) &&
+                  isUnverifiedLocationWarning(act.caution)
+                ) && (
                   <div className="mt-2 flex items-start gap-2 p-2 rounded-md bg-amber-50 border border-amber-300 text-sm text-amber-800">
                     <span className="shrink-0">⚠️</span>
                     <span>{act.caution}</span>
@@ -873,9 +885,9 @@ function DayCard({ day, reoptLoading, reoptDay, onReopt }: {
             </div>
           </div>
         ))}
-        {(day.route_warnings || []).length > 0 && (
+        {visibleRouteWarnings.length > 0 && (
           <div className="space-y-2">
-            {(day.route_warnings || []).map((warning: string, idx: number) => (
+            {visibleRouteWarnings.map((warning: string, idx: number) => (
               <div key={idx} className="p-2 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-800">
                 ⚠️ {warning}
               </div>

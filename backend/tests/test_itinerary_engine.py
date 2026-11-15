@@ -171,6 +171,37 @@ class ItineraryEngineTests(unittest.TestCase):
         self.assertIn("Location not verified", day["activities"][0]["caution"])
         self.assertIn("No route time or distance is estimated", day["activities"][0]["travel_note"])
 
+    def test_unverified_attraction_from_unselected_cluster_is_scheduled_standalone(self):
+        places = [
+            {
+                "name": "Verified Jaipur attraction", "location": "Jaipur, Rajasthan",
+                "lat": 26.9, "lon": 75.8, "coordinates_verified": True,
+                "open_time": "09:00", "close_time": "18:00",
+                "visit_duration_hrs": 1, "rating": 5,
+            },
+            {
+                "name": "Unverified Goa attraction", "location": "Goa, India",
+                "lat": 0, "lon": 0, "coordinates_verified": False,
+                "open_time": "09:00", "close_time": "18:00",
+                "visit_duration_hrs": 1, "rating": 4.9,
+            },
+        ]
+        days = run_algorithm_pipeline(
+            places, [], {**self.td, "duration": 1}, {}, self.env
+        )
+        scheduled = [
+            activity for day in days for activity in day["activities"]
+        ]
+        self.assertEqual(
+            {activity["activity"] for activity in scheduled},
+            {"Verified Jaipur attraction", "Unverified Goa attraction"},
+        )
+        unverified = next(
+            a for a in scheduled if a["activity"] == "Unverified Goa attraction"
+        )
+        self.assertIn("Location not verified", unverified["caution"])
+        self.assertIn("no route time is estimated", unverified["travel_note"].lower())
+
     def test_distant_cities_are_not_mixed_into_one_day(self):
         places = [
             {"name": "Jaipur attraction", "location": "Jaipur, Rajasthan",

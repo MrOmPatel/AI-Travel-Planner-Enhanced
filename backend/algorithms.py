@@ -182,7 +182,10 @@ def _balanced_geo_groups(places, duration, return_unselected=False):
     """
     duration = max(1, int(duration))
     if not places:
-        return [[] for _ in range(duration)]
+        empty_groups = [[] for _ in range(duration)]
+        if return_unselected:
+            return empty_groups, []
+        return empty_groups
 
     geo_indices = [i for i, place in enumerate(places) if _valid_coords(place)]
     no_geo_indices = [i for i, place in enumerate(places) if not _valid_coords(place)]
@@ -393,6 +396,9 @@ def _build_one_day(day_places, day_index, date_label, daily_weather,
         if not coord:
             travel_note = "Standalone visit: exact coordinates are unverified; confirm the location and arrange transport independently. No route time or distance is estimated."
             warnings.append("Location not verified: confirm the attraction's exact location and opening hours before departure; transport time is not estimated.")
+            warning = "Unverified coordinates: confirm the exact location and arrange transport independently; no route distance or travel time is estimated."
+            if warning not in route_warnings:
+                route_warnings.append(warning)
         if previous is not None:
             if prev_coord and coord:
                 km = haversine(*prev_coord, *coord)
@@ -552,6 +558,30 @@ def run_algorithm_pipeline(places: list,
 
     ranked = score_and_rank_places(candidates, interests, env.get("activities_per_day", 0))
     groups, outside_area_places = _balanced_geo_groups(ranked, duration, return_unselected=True)
+
+    # Geocoding is a routing-confidence signal, not an eligibility requirement.
+    # Bring unverified attractions from otherwise-unselected clusters into the
+    # daily schedules as standalone stops. Prefer a matching locality; when no
+    # locality can be established, use the least-loaded day. Verified distant
+    # attractions remain outside the selected daily areas.
+    unverified_outside = [
+        p for p in outside_area_places if not _valid_coords(p)
+    ]
+    outside_area_places = [
+        p for p in outside_area_places if _valid_coords(p)
+    ]
+    for place in unverified_outside:
+        locality = _locality_key(place)
+        matching_days = [
+            idx for idx, group in enumerate(groups)
+            if locality and any(_locality_key(member) == locality for member in group)
+        ]
+        if matching_days:
+            target_day = min(matching_days, key=lambda idx: len(groups[idx]))
+        else:
+            target_day = min(range(duration), key=lambda idx: len(groups[idx]))
+        groups[target_day].append(place)
+
     daily_forecasts = {
         str(d.get("date", "")): d
         for d in (weather or {}).get("daily_forecast", [])
