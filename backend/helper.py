@@ -208,9 +208,19 @@ class Helper:
         destination_tokens = {t for t in re.findall(r"[a-z0-9]+", destination.lower()) if len(t) > 2}
         name_tokens = {t for t in re.findall(r"[a-z0-9]+", name.lower()) if len(t) > 2}
 
-        # Keep the public Nominatim endpoint below its one-request-per-second policy.
-        for term in unique_terms[:3]:
-            query = ", ".join(x for x in (term, locality, destination) if x)
+        # Try the attraction with the destination first. Add the supplied
+        # locality only as a second, more specific disambiguation attempt.
+        # Keep at most three requests to respect Nominatim's public rate limit.
+        query_terms = [(name, destination)]
+        if locality:
+            query_terms.append((name, locality, destination))
+        query_terms.extend((term, destination) for term in unique_terms[1:2])
+        seen_queries = set()
+        for parts in query_terms[:3]:
+            query = ", ".join(x for x in parts if x)
+            if query.lower() in seen_queries:
+                continue
+            seen_queries.add(query.lower())
             try:
                 time.sleep(1.1)
                 response = requests.get(

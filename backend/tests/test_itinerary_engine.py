@@ -119,7 +119,7 @@ class ItineraryEngineTests(unittest.TestCase):
         self.assertEqual(len(all_scheduled), len(set(all_scheduled)))
 
 
-    def test_final_fallback_schedules_unverified_additional_place_on_empty_day(self):
+    def test_final_fallback_does_not_randomly_schedule_unverified_place_without_locality_match(self):
         first = {
             "name": "Scheduled Jaipur attraction", "location": "Jaipur",
             "lat": 26.9, "lon": 75.8, "coordinates_verified": True,
@@ -140,11 +140,11 @@ class ItineraryEngineTests(unittest.TestCase):
                 [first, fallback], [], {**self.td, "duration": 2}, {}, self.env
             )
         self.assertEqual(days[0]["activities"][0]["activity"], "Scheduled Jaipur attraction")
-        self.assertTrue(days[1]["activities"])
-        self.assertEqual(days[1]["activities"][0]["activity"], "Ponda standalone attraction")
-        self.assertIn("unverified coordinates", days[1]["route_warnings"][0].lower())
-        self.assertFalse(any(p.get("name") == "Ponda standalone attraction"
-                             for day in days for p in day["additional_places"]))
+        self.assertFalse(days[1]["activities"])
+        self.assertTrue(any(
+            p.get("name") == "Ponda standalone attraction"
+            for day in days for p in day["additional_places"]
+        ))
 
     def test_restaurants_are_not_inserted_into_daily_route(self):
         places = [{
@@ -171,7 +171,7 @@ class ItineraryEngineTests(unittest.TestCase):
         self.assertIn("Location not verified", day["activities"][0]["caution"])
         self.assertIn("No route time or distance is estimated", day["activities"][0]["travel_note"])
 
-    def test_unverified_attraction_from_unselected_cluster_is_scheduled_standalone(self):
+    def test_unverified_attraction_from_unselected_city_is_not_randomly_scheduled(self):
         places = [
             {
                 "name": "Verified Jaipur attraction", "location": "Jaipur, Rajasthan",
@@ -194,13 +194,41 @@ class ItineraryEngineTests(unittest.TestCase):
         ]
         self.assertEqual(
             {activity["activity"] for activity in scheduled},
-            {"Verified Jaipur attraction", "Unverified Goa attraction"},
+            {"Verified Jaipur attraction"},
         )
-        unverified = next(
-            a for a in scheduled if a["activity"] == "Unverified Goa attraction"
+        self.assertTrue(any(
+            p.get("name") == "Unverified Goa attraction"
+            for day in days for p in day["additional_places"]
+        ))
+
+    def test_unverified_attractions_with_same_specific_locality_are_grouped(self):
+        places = [
+            {"name": "Assi Ghat", "location": "Assi Ghat, Varanasi, Uttar Pradesh",
+             "locality": "Assi", "lat": 0, "lon": 0, "coordinates_verified": False,
+             "open_time": "05:00", "close_time": "20:00", "visit_duration_hrs": 1},
+            {"name": "Tulsi Ghat", "location": "Tulsi Ghat, Assi, Varanasi",
+             "locality": "Assi", "lat": 0, "lon": 0, "coordinates_verified": False,
+             "open_time": "05:00", "close_time": "20:00", "visit_duration_hrs": 1},
+            {"name": "Sarnath Museum", "location": "Sarnath, Varanasi",
+             "locality": "Sarnath", "lat": 0, "lon": 0, "coordinates_verified": False,
+             "open_time": "09:00", "close_time": "17:00", "visit_duration_hrs": 1},
+        ]
+        groups, unselected = algorithms._balanced_geo_groups(
+            places, 3, return_unselected=True
         )
-        self.assertIn("Location not verified", unverified["caution"])
-        self.assertIn("no route time is estimated", unverified["travel_note"].lower())
+        self.assertEqual(len(groups), 3)
+        self.assertTrue(any(
+            {p["name"] for p in group} >= {"Assi Ghat", "Tulsi Ghat"}
+            for group in groups
+        ))
+        self.assertEqual(unselected, [])
+
+    def test_same_attraction_name_does_not_override_different_localities(self):
+        first = {"name": "Shiv Temple", "location": "Old City, Jaipur",
+                 "locality": "Old City", "coordinates_verified": False}
+        second = {"name": "Shiv Temple", "location": "Sarnath, Varanasi",
+                  "locality": "Sarnath", "coordinates_verified": False}
+        self.assertFalse(algorithms._localities_match(first, second))
 
     def test_distant_cities_are_not_mixed_into_one_day(self):
         places = [

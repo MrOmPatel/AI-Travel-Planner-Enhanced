@@ -12,6 +12,7 @@ Core guarantees:
 - Geographic clustering precedes day scheduling; no assumed hotel (0,0) origin.
 """
 import math
+import re
 from datetime import date, timedelta
 
 
@@ -160,14 +161,52 @@ def _nearest_path(places):
 
 
 def _locality_key(place):
-    """Return a usable locality label without treating a state/country as a city."""
-    raw = str(place.get("location") or "").strip()
+    """Extract a conservative locality label for fallback grouping only.
+
+    Explicit locality/neighbourhood fields take precedence over a free-form
+    address. This label is never used to calculate route distance or time.
+    """
+    raw = (
+        place.get("verified_locality")
+        or place.get("locality")
+        or place.get("neighbourhood")
+        or place.get("neighborhood")
+        or place.get("location")
+        or ""
+    )
+    raw = str(raw).strip()
     if not raw:
         return ""
+
+    # For comma-separated addresses, the first component is usually the most
+    # specific area. Remove common address prefixes before normalizing.
     first = raw.split(",", 1)[0].strip().lower()
-    generic = {"india", "rajasthan", "gujarat", "delhi", "madhya pradesh",
-               "uttar pradesh", "maharashtra", "goa", "kerala", "unknown"}
-    return "" if first in generic else " ".join(first.split())
+    first = re.sub(r"^(?:near|around|in the vicinity of|close to)\s+", "", first)
+    first = re.sub(r"\s+", " ", first).strip(" .-")
+
+    generic = {
+        "india", "rajasthan", "gujarat", "delhi", "madhya pradesh",
+        "uttar pradesh", "maharashtra", "goa", "kerala", "unknown",
+    }
+    if first in generic:
+        return ""
+    return first
+
+
+def _localities_match(first, second):
+    """Match locality labels conservatively; never infer geographic distance."""
+    a, b = _locality_key(first), _locality_key(second)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    # Permit minor wording differences only when both labels contain at least
+    # two meaningful tokens and their token overlap is very high.
+    a_tokens, b_tokens = set(a.split()), set(b.split())
+    if min(len(a_tokens), len(b_tokens)) < 2:
+        return False
+    overlap = len(a_tokens & b_tokens) / len(a_tokens | b_tokens)
+    return overlap >= 0.8
 
 
 def _balanced_geo_groups(places, duration, return_unselected=False):
@@ -182,10 +221,7 @@ def _balanced_geo_groups(places, duration, return_unselected=False):
     """
     duration = max(1, int(duration))
     if not places:
-        empty_groups = [[] for _ in range(duration)]
-        if return_unselected:
-            return empty_groups, []
-        return empty_groups
+        return [[] for _ in range(duration)]
 
     geo_indices = [i for i, place in enumerate(places) if _valid_coords(place)]
     no_geo_indices = [i for i, place in enumerate(places) if not _valid_coords(place)]
@@ -223,7 +259,7 @@ def _balanced_geo_groups(places, duration, return_unselected=False):
         matches = []
         if locality:
             for cluster_idx, cluster in enumerate(clusters):
-                if any(_locality_key(member) == locality for member in cluster):
+                if any(_localities_match(place, member) for member in cluster):
                     matches.append(cluster_idx)
         if len(matches) == 1:
             clusters[matches[0]].append(place)
@@ -560,10 +596,9 @@ def run_algorithm_pipeline(places: list,
     groups, outside_area_places = _balanced_geo_groups(ranked, duration, return_unselected=True)
 
     # Geocoding is a routing-confidence signal, not an eligibility requirement.
-    # Bring unverified attractions from otherwise-unselected clusters into the
-    # daily schedules as standalone stops. Prefer a matching locality; when no
-    # locality can be established, use the least-loaded day. Verified distant
-    # attractions remain outside the selected daily areas.
+    # Unverified places from unselected areas join a day only when their
+    # locality text matches that day's selected area. Otherwise they remain
+    # visible as additional suggestions; do not allocate them arbitrarily.
     unverified_outside = [
         p for p in outside_area_places if not _valid_coords(p)
     ]
@@ -571,16 +606,15 @@ def run_algorithm_pipeline(places: list,
         p for p in outside_area_places if _valid_coords(p)
     ]
     for place in unverified_outside:
-        locality = _locality_key(place)
         matching_days = [
             idx for idx, group in enumerate(groups)
-            if locality and any(_locality_key(member) == locality for member in group)
+            if any(_localities_match(place, member) for member in group)
         ]
         if matching_days:
             target_day = min(matching_days, key=lambda idx: len(groups[idx]))
+            groups[target_day].append(place)
         else:
-            target_day = min(range(duration), key=lambda idx: len(groups[idx]))
-        groups[target_day].append(place)
+            outside_area_places.append(place)
 
     daily_forecasts = {
         str(d.get("date", "")): d
@@ -635,8 +669,7 @@ def run_algorithm_pipeline(places: list,
         return None
 
     def locality_matches(a, b):
-        ka, kb = _locality_key(a), _locality_key(b)
-        return bool(ka and kb and ka == kb)
+        return _localities_match(a, b)
 
     for day_idx, day in enumerate(algo_days):
         if day["activities"] or not remaining_candidates:
@@ -654,11 +687,15 @@ def run_algorithm_pipeline(places: list,
             first = verified_remaining[0]
         else:
             original_group = groups[day_idx] if day_idx < len(groups) else []
-            original_localities = {_locality_key(p) for p in original_group if _locality_key(p)}
-            first = next(
-                (p for p in remaining_candidates if _locality_key(p) in original_localities),
-                remaining_candidates[0]
-            )
+            locality_matches_for_day = [
+                p for p in remaining_candidates
+                if any(_localities_match(p, member) for member in original_group)
+            ]
+            if not locality_matches_for_day:
+                # No verified coordinates and no locality evidence: leave the
+                # day empty rather than inventing a geographic association.
+                continue
+            first = locality_matches_for_day[0]
 
         first_coord = _valid_coords(first)
         first_locality = _locality_key(first)
@@ -670,7 +707,7 @@ def run_algorithm_pipeline(places: list,
             if first_coord and candidate_coord:
                 if haversine(*first_coord, *candidate_coord) <= 35.0:
                     fallback_group.append(candidate)
-            elif first_locality and _locality_key(candidate) == first_locality:
+            elif first_locality and _localities_match(first, candidate):
                 fallback_group.append(candidate)
 
         remaining_candidates = [
